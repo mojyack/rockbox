@@ -1401,6 +1401,10 @@ Lyre prototype 1 */
 #define USB_ENABLE_AUDIO
 #endif
 
+#if defined(USB_ENABLE_HID) && defined(USB_ENABLE_AUDIO)
+#define USB_ENABLE_IAP
+#endif
+
 #endif /* BOOTLOADER */
 
 #endif /* HAVE_USBSTACK */
