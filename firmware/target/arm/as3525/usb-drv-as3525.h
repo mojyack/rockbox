@@ -23,6 +23,7 @@
 
 #include "as3525.h"
 
+/* TODO: why don't we use USB_NUM_ENDPOINTS? */
 #define USB_NUM_EPS         4
 
 typedef struct {
