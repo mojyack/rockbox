@@ -308,6 +308,9 @@
    transfer size, so it seems like a good size */
 #define NUM_TDS_PER_EP 4
 
+struct usb_drv_ep_spec usb_drv_ep_specs[USB_NUM_ENDPOINTS]; /* filled in usb_drv_init */
+uint8_t usb_drv_ep_specs_flags = USB_ENDPOINT_SPEC_FORCE_IO_TYPE_MATCH;
+
 typedef struct usb_endpoint
 {
     bool allocated[2];
@@ -491,6 +494,14 @@ void usb_drv_init(void)
     logf("usb dccparams %x", REG_DCCPARAMS);
 
     /* now a bus reset will occur. see bus_reset() */
+
+    /* fill the endpoint spec table */
+    usb_drv_ep_specs[0].type[DIR_OUT] = USB_ENDPOINT_XFER_CONTROL;
+    usb_drv_ep_specs[0].type[DIR_IN] = USB_ENDPOINT_XFER_CONTROL;
+    for(int i = 1; i < USB_NUM_ENDPOINTS; i += 1) {
+        usb_drv_ep_specs[i].type[DIR_OUT] = USB_ENDPOINT_TYPE_ANY;
+        usb_drv_ep_specs[i].type[DIR_IN] = USB_ENDPOINT_TYPE_ANY;
+    }
 }
 
 void usb_drv_exit(void)
@@ -797,51 +808,28 @@ void usb_drv_cancel_all_transfers(void)
     }
 }
 
-int usb_drv_request_endpoint(int type, int dir)
-{
-    int ep_num, ep_dir;
-    short ep_type;
+int usb_drv_init_endpoint(int endpoint, int type) {
+    int ep_num = EP_NUM(endpoint);
+    int ep_dir = EP_DIR(endpoint);
+    int ep_type = type & USB_ENDPOINT_XFERTYPE_MASK; /* Safety */
 
-    /* Safety */
-    ep_dir = EP_DIR(dir);
-    ep_type = type & USB_ENDPOINT_XFERTYPE_MASK;
+    logf("ep init: %s %s", XFER_DIR_STR(ep_dir), XFER_TYPE_STR(ep_type));
 
-    logf("req: %s %s", XFER_DIR_STR(ep_dir), XFER_TYPE_STR(ep_type));
+    endpoints[ep_num].allocated[ep_dir] = 1;
+    endpoints[ep_num].type[ep_dir] = ep_type;
 
-    /* Find an available ep/dir pair */
-    for (ep_num=1;ep_num<USB_NUM_ENDPOINTS;ep_num++) {
-        usb_endpoint_t* endpoint=&endpoints[ep_num];
-        int other_dir=(ep_dir ? 0:1);
+    log_ep(ep_num, ep_dir, "add");
 
-        if (endpoint->allocated[ep_dir])
-            continue;
-
-        if (endpoint->allocated[other_dir] &&
-                endpoint->type[other_dir] != ep_type) {
-            logf("ep of different type!");
-            continue;
-        }
-
-
-        endpoint->allocated[ep_dir] = 1;
-        endpoint->type[ep_dir] = ep_type;
-
-        log_ep(ep_num, ep_dir, "add");
-        return (ep_num | (dir & USB_ENDPOINT_DIR_MASK));
-    }
-
-    return -1;
+    return 0;
 }
 
-void usb_drv_release_endpoint(int ep)
-{
-    int ep_num = EP_NUM(ep);
-    int ep_dir = EP_DIR(ep);
-
+int usb_drv_deinit_endpoint(int endpoint) {
+    int ep_num = EP_NUM(endpoint);
+    int ep_dir = EP_DIR(endpoint);
     log_ep(ep_num, ep_dir, "rel");
     endpoints[ep_num].allocated[ep_dir] = 0;
+    return 0;
 }
-
 
 static void prepare_td(struct transfer_descriptor* td,
                        struct transfer_descriptor* previous_td,
