@@ -122,7 +122,7 @@ static bool currently_sending = false;
 static int usb_interface;
 
 struct usb_class_driver_ep_allocation usb_hid_ep_allocs[1] = {
-    {.type = USB_ENDPOINT_XFER_INT, .dir = USB_DIR_IN, .optional = false},
+    {.type = USB_ENDPOINT_XFER_INT, .dir = DIR_IN, .optional = false},
 };
 
 #define EP_IN (usb_hid_ep_allocs[0].ep)
