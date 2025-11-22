@@ -323,8 +323,8 @@ static bool locked[NUM_DRIVES];
 static int usb_interface;
 
 struct usb_class_driver_ep_allocation usb_storage_ep_allocs[2] = {
-    {.type = USB_ENDPOINT_XFER_BULK, .dir = USB_DIR_IN, .optional = false},
-    {.type = USB_ENDPOINT_XFER_BULK, .dir = USB_DIR_OUT, .optional = false},
+    {.type = USB_ENDPOINT_XFER_BULK, .dir = DIR_IN, .optional = false},
+    {.type = USB_ENDPOINT_XFER_BULK, .dir = DIR_OUT, .optional = false},
 };
 
 #define EP_IN (usb_storage_ep_allocs[0].ep)
