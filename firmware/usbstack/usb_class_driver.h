@@ -31,7 +31,7 @@
 
 struct usb_class_driver_ep_allocation {
     uint8_t type;  /* by driver, required ep type. USB_ENDPOINT_XFER_* */
-    uint8_t dir;   /* by driver, required ep dir. USB_DIR_* */
+    uint8_t dir;   /* by driver, required ep dir. DIR_{IN,OUT} */
     uint8_t ep;    /* by core, allocated ep. > 0 are valid but can be 0 if optional==true */
     bool optional; /* by driver, set true to mark this requirement to be optional */
 };
