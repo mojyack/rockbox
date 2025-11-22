@@ -329,6 +329,7 @@ int ipod_open(struct ipod_t* ipod, int silent)
                    ,ipod->sector_size);
         }
     }
+    ipod->sector_size = 2048;
 
     get_geometry(ipod);
 
