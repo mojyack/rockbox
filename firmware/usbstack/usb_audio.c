@@ -299,9 +299,9 @@ static int as_playback_freq_idx; /* audio playback streaming frequency index (in
 
 struct usb_class_driver_ep_allocation usb_audio_ep_allocs[2] = {
     /* output isochronous endpoint */
-    {.type = USB_ENDPOINT_XFER_ISOC, .dir = USB_DIR_OUT, .optional = false},
+    {.type = USB_ENDPOINT_XFER_ISOC, .dir = DIR_OUT, .optional = false},
     /* input feedback isochronous endpoint */
-    {.type = USB_ENDPOINT_XFER_ISOC, .dir = USB_DIR_IN, .optional = false},
+    {.type = USB_ENDPOINT_XFER_ISOC, .dir = DIR_IN, .optional = false},
 };
 
 #define EP_ISO_OUT (usb_audio_ep_allocs[0].ep)
