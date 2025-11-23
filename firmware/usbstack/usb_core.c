@@ -53,6 +53,10 @@
 #include "usb_audio_def.h" // DEBUG
 #endif
 
+#ifdef USB_ENABLE_IAP
+#include "usb_iap.h"
+#endif
+
 /* TODO: Move target-specific stuff somewhere else (serial number reading) */
 
 #if defined(IPOD_ARCH) && defined(CPU_PP)
@@ -72,7 +76,11 @@
 #define USB_MAX_CURRENT 500
 #endif
 
+#ifdef USB_ENABLE_IAP
+#define NUM_CONFIGS 2
+#else
 #define NUM_CONFIGS 1
+#endif
 
 #define log(fmt, ...) logf("%s:%d " fmt, __FUNCTION__, __LINE__ __VA_OPT__(, __VA_ARGS__));
 
@@ -109,7 +117,7 @@ static struct usb_config_descriptor __attribute__((aligned(2)))
     .bDescriptorType     = USB_DT_CONFIG,
     .wTotalLength        = 0, /* will be filled in later */
     .bNumInterfaces      = 1,
-    .bConfigurationValue = 1,
+    .bConfigurationValue = 0,
     .iConfiguration      = 0,
     .bmAttributes        = USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER,
     .bMaxPower           = (USB_MAX_CURRENT + 1) / 2, /* In 2mA units */
@@ -302,6 +310,29 @@ static struct usb_class_driver drivers[USB_NUM_DRIVERS] =
 #endif
         .set_interface = usb_audio_set_interface,
         .get_interface = usb_audio_get_interface,
+    },
+#endif
+#ifdef USB_ENABLE_IAP
+    [USB_DRIVER_IAP] = {
+        .enabled = false,
+        .needs_exclusive_storage = false,
+        .config = 2,
+        .first_interface = 0,
+        .last_interface = 0,
+        .ep_allocs_size = ARRAYLEN(usb_iap_ep_allocs),
+        .ep_allocs = usb_iap_ep_allocs,
+        .set_first_interface = usb_iap_set_first_interface,
+        .get_config_descriptor = usb_iap_get_config_descriptor,
+        .init_connection = usb_iap_init_connection,
+        .init = usb_iap_init,
+        .disconnect = usb_iap_disconnect,
+        .transfer_complete = usb_iap_transfer_complete,
+        .control_request = usb_iap_control_request,
+#ifdef HAVE_HOTSWAP
+        .notify_hotswap = NULL,
+#endif
+        .set_interface = usb_iap_set_interface,
+        .get_interface = usb_iap_get_interface,
     },
 #endif
 };
@@ -808,6 +839,7 @@ static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, v
             }
 
             config_descriptor.bNumInterfaces = usb_core_num_interfaces[index];
+            config_descriptor.bConfigurationValue = index + 1;
             config_descriptor.wTotalLength = (uint16_t)size;
             memcpy(&response_data[0], &config_descriptor, sizeof(struct usb_config_descriptor));
 
