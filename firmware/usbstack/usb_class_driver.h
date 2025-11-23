@@ -48,8 +48,8 @@ struct usb_class_driver {
     bool needs_exclusive_storage;
 
     /* Endpoint allocation state table */
+    uint8_t ep_allocs_size;
     struct usb_class_driver_ep_allocation* ep_allocs;
-    size_t ep_allocs_size;
 
     /* Tells the driver what its first interface number will be. The driver
        returns the number of the first available interface for the next driver
