@@ -23,7 +23,7 @@
 #include "kernel.h"
 #include "string.h"
 #include "panic.h"
-/*#define LOGF_ENABLE*/
+#define LOGF_ENABLE
 #include "logf.h"
 
 #include "usb.h"
@@ -71,6 +71,8 @@
 #ifndef USB_MAX_CURRENT
 #define USB_MAX_CURRENT 500
 #endif
+
+#define log(fmt, ...) logf("%s:%d " fmt, __FUNCTION__, __LINE__ __VA_OPT__(, __VA_ARGS__));
 
 /*-------------------------------------------------------------------------*/
 /* USB protocol descriptors: */
@@ -534,6 +536,7 @@ void usb_core_handle_transfer_completion(
 
 void usb_core_enable_driver(int driver, bool enabled)
 {
+    log("enabled driver=%d flag=%d", driver, enabled);
     drivers[driver].enabled = enabled;
 }
 
@@ -592,27 +595,33 @@ static void allocate_interfaces_and_endpoints(void)
     }
 
     for(int i = 0; i < USB_NUM_DRIVERS; i++) {
+        log("driver %d", i);
         struct usb_class_driver* driver = &drivers[i];
 
         if(!driver->enabled) {
+            log("not enabled");
             continue;
         }
 
         /* assign endpoints */
         for(int reqnum = 0; reqnum < driver->ep_allocs_size; reqnum += 1) {
+            log("request %d", reqnum);
             /* find matching ep */
             struct usb_class_driver_ep_allocation* req = &driver->ep_allocs[reqnum];
             req->ep = 0;
             for(int epnum = 1; epnum < USB_NUM_ENDPOINTS; epnum += 1) {
+                log("against ep %d", epnum);
                 struct usb_drv_ep_spec* spec = &usb_drv_ep_specs[epnum];
                 /* ep type check */
                 const int8_t spec_type = spec->type[req->dir];
                 if(spec_type != req->type && spec_type != USB_ENDPOINT_TYPE_ANY) {
+                    log("!type %d %d", spec_type, req->type);
                     continue;
                 }
                 /* free check */
                 struct ep_alloc_state* alloc = &ep_alloc_states[0][epnum];
                 if(alloc->owner[req->dir] != NULL) {
+                    log("!free");
                     continue;
                 }
 
@@ -623,6 +632,7 @@ static void allocate_interfaces_and_endpoints(void)
                     /* check for the other direction type */
                     if(alloc->owner[!req->dir] != NULL) {
                         /* the other side is allocated */
+                        log("already allocated");
                         continue;
                     }
                 }
@@ -630,6 +640,7 @@ static void allocate_interfaces_and_endpoints(void)
                     /* check for other direction type */
                     if(alloc->owner[!req->dir] != NULL && alloc->type[!req->dir] != req->type) {
                         /* the other side is allocated with another type */
+                        log("another type");
                         continue;
                     }
                 }
@@ -639,6 +650,7 @@ static void allocate_interfaces_and_endpoints(void)
                 req->ep = ep;
                 alloc->owner[req->dir] = driver;
                 alloc->type[req->dir] = req->type;
+                log("allocated %d", epnum);
                 break;
             }
             if(req->ep == 0 && !req->optional) {
