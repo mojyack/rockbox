@@ -904,9 +904,6 @@ static int usb_core_do_set_config(uint8_t new_config)
         logf("usb_core: invalid config number");
         return -1;
     }
-    if(new_config == usb_config) {
-        return 0;
-    }
 
     /* deactivate old config */
     if(usb_config != 0) {
@@ -1161,6 +1158,15 @@ void usb_core_bus_reset(void)
     logf("usb_core: bus reset");
     usb_address = 0;
     usb_state = DEFAULT;
+    if(usb_config != 0) {
+        for(int i = 0; i < USB_NUM_DRIVERS; i++) {
+            if(is_active(drivers[i]) && drivers[i].disconnect != NULL) {
+                drivers[i].disconnect();
+            }
+        }
+        init_deinit_endpoints(usb_config - 1, false);
+    }
+    usb_config = 0;
 #ifdef HAVE_USB_CHARGING_ENABLE
 #ifdef HAVE_USB_CHARGING_IN_THREAD
     /* On some targets usb_charging_maxcurrent_change() cannot be called
@@ -1209,6 +1215,12 @@ void usb_core_transfer_complete(int endpoint, int dir, int status, int length)
     usb_signal_transfer_completion(completion_event);
 }
 
+static void usb_core_tick(void) {
+    if(drivers[USB_DRIVER_IAP].enabled) {
+        usb_iap_tick();
+    }
+}
+
 void usb_core_handle_notify(long id, intptr_t data)
 {
     switch(id)
@@ -1219,6 +1231,8 @@ void usb_core_handle_notify(long id, intptr_t data)
         case USB_NOTIFY_SET_CONFIG:
             usb_core_do_set_config(data);
             break;
+        case USB_NOTIFY_TICK:
+            usb_core_tick();
         default:
             break;
     }
@@ -1268,17 +1282,11 @@ void usb_drv_control_response(enum usb_control_response resp,
                               void* data, int length)
 {
     struct usb_ctrlrequest* req = active_request;
-    unsigned int num_active = num_active_requests--;
 
-    /*
-     * There should have been a prior request submission, at least.
-     * FIXME: It seems the iPod video can get here and ignoring it
-     * allows the connection to succeed??
-     */
-    if (num_active == 0)
+    /* There should have been a prior request submission, at least. */
+    if (num_active_requests <= 0)
     {
-        //panicf("null ctrl req");
-        return;
+        panicf("null ctrl req");
     }
 
     /*
@@ -1295,7 +1303,7 @@ void usb_drv_control_response(enum usb_control_response resp,
      * Play it safe and return a STALL. At this point we've recovered from
      * the error on our end and will be ready to handle the next request.
      */
-    if (num_active > 1)
+    if (num_active_requests >= 2)
     {
         active_request = NULL;
         num_active_requests = 0;
@@ -1306,6 +1314,7 @@ void usb_drv_control_response(enum usb_control_response resp,
     if(req->wLength == 0)
     {
         active_request = NULL;
+        num_active_requests--;
 
         /* No-data request */
         if(resp == USB_CONTROL_ACK)
@@ -1317,16 +1326,17 @@ void usb_drv_control_response(enum usb_control_response resp,
     }
     else if(req->bRequestType & USB_DIR_IN)
     {
+        active_request = NULL;
+        num_active_requests--;
+
         /* Control read request */
         if(resp == USB_CONTROL_ACK)
         {
-            active_request = NULL;
             usb_drv_recv_nonblocking(EP_CONTROL, NULL, 0);
             usb_drv_send(EP_CONTROL, data, length);
         }
         else if(resp == USB_CONTROL_STALL)
         {
-            active_request = NULL;
             usb_drv_stall(EP_CONTROL, true, true);
         }
         else
@@ -1348,6 +1358,7 @@ void usb_drv_control_response(enum usb_control_response resp,
             /* We should stall the OUT endpoint here, but the old code did
              * not do so and some drivers may not handle it correctly. */
             active_request = NULL;
+            num_active_requests--;
             usb_drv_stall(EP_CONTROL, true, true);
         }
         else
@@ -1358,6 +1369,7 @@ void usb_drv_control_response(enum usb_control_response resp,
     else
     {
         active_request = NULL;
+        num_active_requests--;
         control_write_data = NULL;
         control_write_data_done = false;
 
