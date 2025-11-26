@@ -1242,18 +1242,8 @@ static void usb_core_control_request_handler(struct usb_ctrlrequest* req, void* 
 void usb_core_bus_reset(void)
 {
     logf("usb_core: bus reset");
-    usb_core_do_set_config(0);
-    usb_address = 0;
-    usb_state = DEFAULT;
-#ifdef HAVE_USB_CHARGING_ENABLE
-#ifdef HAVE_USB_CHARGING_IN_THREAD
-    /* On some targets usb_charging_maxcurrent_change() cannot be called
-     * from an interrupt handler; get the USB thread to do it instead. */
-    usb_charger_update();
-#else
-    usb_charging_maxcurrent_change(usb_charging_maxcurrent());
-#endif
-#endif
+    /* cannot call do_set_config in interrupt handler, defer it to usb thread */
+    usb_signal_notify(USB_NOTIFY_CLASS_DRIVER, 0xff);
 }
 
 /* called by usb_drv_transfer_completed() */
@@ -1305,6 +1295,14 @@ void usb_core_handle_notify(long id, intptr_t data)
             break;
         case USB_NOTIFY_CLASS_DRIVER: {
                 uint8_t index = data & 0xff;
+                if(index == 0xff) {
+                    /* bus reset */
+                    usb_core_do_set_config(0);
+                    usb_address = 0;
+                    usb_state = DEFAULT;
+                    usb_charging_maxcurrent_change(usb_charging_maxcurrent());
+                    break;
+                }
                 if(index >= USB_NUM_DRIVERS) {
                     logf("usb_core: notification destination invalid %u", index);
                     return;
