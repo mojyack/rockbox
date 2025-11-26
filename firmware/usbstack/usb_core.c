@@ -333,6 +333,7 @@ static struct usb_class_driver drivers[USB_NUM_DRIVERS] =
 #endif
         .set_interface = usb_iap_set_interface,
         .get_interface = usb_iap_get_interface,
+        .notify_event = usb_iap_notify_event,
     },
 #endif
 };
@@ -1200,12 +1201,6 @@ void usb_core_transfer_complete(int endpoint, int dir, int status, int length)
     usb_signal_transfer_completion(completion_event);
 }
 
-static void usb_core_tick(void) {
-    if(drivers[USB_DRIVER_IAP].enabled) {
-        usb_iap_tick();
-    }
-}
-
 void usb_core_handle_notify(long id, intptr_t data)
 {
     switch(id)
@@ -1216,8 +1211,16 @@ void usb_core_handle_notify(long id, intptr_t data)
         case USB_NOTIFY_SET_CONFIG:
             usb_core_do_set_config(data);
             break;
-        case USB_NOTIFY_TICK:
-            usb_core_tick();
+        case USB_NOTIFY_CLASS_DRIVER: {
+                uint8_t index = data & 0xff;
+                if(index >= USB_NUM_DRIVERS) {
+                    logf("usb_core: notification destination invalid %u", index);
+                    return;
+                }
+                if(is_active(drivers[index]) && drivers[index].notify_event != NULL) {
+                    drivers[index].notify_event(data);
+                }
+            } break;
         default:
             break;
     }

@@ -474,6 +474,7 @@ static void NORETURN_ATTR usb_thread(void)
 #ifdef HAVE_USBSTACK
         case USB_NOTIFY_SET_ADDR:
         case USB_NOTIFY_SET_CONFIG:
+        case USB_NOTIFY_CLASS_DRIVER:
             if(usb_state <= USB_EXTRACTED)
                 break;
             usb_core_handle_notify(ev.id, ev.data);

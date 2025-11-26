@@ -118,6 +118,7 @@ enum
     USB_TRANSFER_COMPLETION, /* Event */
     USB_NOTIFY_SET_ADDR,     /* Event */
     USB_NOTIFY_SET_CONFIG,   /* Event */
+    USB_NOTIFY_CLASS_DRIVER, /* Event -  notify_event() of specified class driver */
 #endif
 #ifdef USB_FIREWIRE_HANDLING
     USB_REQUEST_REBOOT,      /* Event */
@@ -244,7 +245,9 @@ void usb_signal_transfer_completion(
     struct usb_transfer_completion_event_data *event_data);
 /* notify the USB code that some important event has occurred which influences the
  * USB state (like USB_NOTIFY_SET_ADDR). USB drivers should call usb_core_notify_*
- * functions and not this function. */
+ * functions and not this function.
+ * for USB_NOTIFY_CLASS_DRIVER, the destination class driver index is calculated
+ * by (data & 0xff), so that the other bytes can be used to pass arbitrary data. */
 void usb_signal_notify(long id, intptr_t data);
 /* returns whether a USB_DRIVER_* is enabled (like HID, mass storage, ...) */
 bool usb_driver_enabled(int driver);
