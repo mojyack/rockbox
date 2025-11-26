@@ -70,8 +70,8 @@
  * mass storage mode, it will require exclusive access to the disk and ask all
  * threads to release any file handle and stop using the disks. It does so by
  * broadcasting a SYS_USB_CONNECTED message, which threads must acknowledge using
- * usb_acknowledge(SYS_USB_CONNECTED_ACK). They must not access the disk until
- * SYS_USB_DISCONNECTED is broadcast. To ease waiting, threads can call
+ * usb_acknowledge(SYS_USB_CONNECTED_ACK, ev.data). They must not access the disk
+ * until SYS_USB_DISCONNECTED is broadcast. To ease waiting, threads can call
  * usb_wait_for_disconnect() or usb_wait_for_disconnect_w_tmo() on their waiting
  * queue.
  *
@@ -192,16 +192,14 @@ struct usb_transfer_completion_event_data
 void usb_init(void) INIT_ATTR;
 /* target must implement this to enable/disable the usb transceiver/core */
 void usb_enable(bool on);
-/* when one or more driver requires exclusive mode, this is called after all threads have acknowledged
- * exclusive mode and disk have been umounted; otherwise it is called immediately after host has
- * been detected */
+/* called after host has been detected */
 void usb_attach(void);
 /* enable usb detection monitoring; before this function is called, all usb
  * detection changes are ignored */
 void usb_start_monitoring(void) INIT_ATTR;
 void usb_close(void);
 /* acknowledge usb connection, typically with SYS_USB_CONNECTED_ACK */
-void usb_acknowledge(long id);
+void usb_acknowledge(long id, intptr_t revision);
 /* block the current thread until SYS_USB_DISCONNECTED has been broadcast */
 void usb_wait_for_disconnect(struct event_queue *q);
 /* same as usb_wait_for_disconnect() but with a timeout, returns 1 on timeout */
@@ -251,8 +249,6 @@ void usb_signal_transfer_completion(
 void usb_signal_notify(long id, intptr_t data);
 /* returns whether a USB_DRIVER_* is enabled (like HID, mass storage, ...) */
 bool usb_driver_enabled(int driver);
-/* returns whether exclusive storage is available for USB */
-bool usb_exclusive_storage(void);
 #endif /* HAVE_USBSTACK */
 
 #ifdef USB_FIREWIRE_HANDLING

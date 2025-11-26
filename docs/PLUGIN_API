@@ -2998,9 +2998,10 @@ void unregister_storage_idle_func(void (*function)(void), bool run)
     \param run
     \description
 
-void usb_acknowledge(long id)
+void usb_acknowledge(long id, intptr_t revision)
     \group usb
     \param id
+    \param revision
     \description
 
 void usb_hid_send(usage_page_t usage_page, int id)

@@ -23,6 +23,12 @@
 #include "kernel.h"
 #include "string.h"
 #include "panic.h"
+#include "disk.h"
+
+/* for Event */
+#include "kernel/kernel-internal.h"
+#include "kernel/thread-internal.h"
+
 #define LOGF_ENABLE
 #include "logf.h"
 
@@ -578,16 +584,6 @@ bool usb_core_driver_enabled(int driver)
     return drivers[driver].enabled;
 }
 
-bool usb_core_any_exclusive_storage(void)
-{
-    int i;
-    for(i = 0; i < USB_NUM_DRIVERS; i++)
-        if(drivers[i].enabled && drivers[i].needs_exclusive_storage)
-            return true;
-
-    return false;
-}
-
 #ifdef HAVE_HOTSWAP
 void usb_core_hotswap_event(int volume, bool inserted)
 {
@@ -890,6 +886,85 @@ static void usb_core_do_set_addr(uint8_t address)
     usb_state = ADDRESS;
 }
 
+IF_COP( static struct corelock ack_queue_cl; )
+static struct event_queue* ack_queue;
+
+void usb_core_ack_connection(intptr_t data) {
+    struct thread_entry *current = __running_self_entry();
+    log("ack %s %ld", current->name, data);
+    IF_COP(corelock_lock(&ack_queue_cl));
+    if(ack_queue != NULL) {
+        queue_post(ack_queue, SYS_USB_CONNECTED_ACK, data);
+    }
+    IF_COP(corelock_unlock(&ack_queue_cl));
+}
+
+static bool wait_for_connection_acks(void) {
+    /* setup queue */
+    struct event_queue queue;
+    queue_init(&queue, false);
+    IF_COP(corelock_lock(&ack_queue_cl));
+    ack_queue = &queue;
+    IF_COP(corelock_unlock(&ack_queue_cl));
+
+    /* notify threads */
+    static intptr_t revision;
+
+    revision += 1;
+    logf("usb insertion revision %ld", revision);
+    int expect = queue_broadcast(SYS_USB_CONNECTED, revision) - 1 /* exclude us */;
+
+    /* receive acks */
+    int acked = 0;
+    long limit = current_tick + HZ * 5; /* up to 5 secs */
+
+    /* TODO: handle usb extraction */
+    while(acked != expect) {
+        struct queue_event event;
+        queue_wait_w_tmo(ack_queue, &event, limit - current_tick);
+        if(event.id == SYS_USB_CONNECTED_ACK) {
+            log("ack received %ld %d %d", event.data, acked, expect);
+            if(event.data == revision) {
+                acked += 1;
+            }
+        } else if(event.id == SYS_TIMEOUT) {
+            break;
+        }
+    }
+
+    /* disable queue */
+    IF_COP(corelock_lock(&ack_queue_cl));
+    ack_queue = NULL;
+    IF_COP(corelock_unlock(&ack_queue_cl));
+    queue_delete(&queue);
+
+    logf("usb insertion revision %ld result %u %u", revision, acked, expect);
+
+    return true; /* TODO: remove this */
+    return acked == expect;
+}
+
+static void set_lockdown(bool on) {
+    if(on) {
+        trigger_cpu_boost();
+#ifdef HAVE_PRIORITY_SCHEDULING
+        thread_set_priority(thread_self(), PRIORITY_REALTIME);
+#endif
+        disk_unmount_all();
+    } else {
+#ifdef HAVE_PRIORITY_SCHEDULING
+        thread_set_priority(thread_self(), PRIORITY_SYSTEM);
+#endif
+        /* Entered exclusive mode */
+        int rc = disk_mount_all();
+        if(rc <= 0) {
+            /* no partition */
+            panicf("mount: %d",rc);
+        }
+        cancel_cpu_boost();
+    }
+}
+
 static int usb_core_do_set_config(uint8_t new_config)
 {
     logf("usb_core: SET_CONFIG %d to %d", usb_config, new_config);
@@ -913,16 +988,33 @@ static int usb_core_do_set_config(uint8_t new_config)
     usb_config = new_config;
     usb_state = usb_config == 0 ? ADDRESS : CONFIGURED;
 
+    bool require_lockdown = false;
+
     /* activate new config */
     if(usb_config != 0) {
         init_deinit_endpoints(usb_config - 1, true);
         for(int i = 0; i < USB_NUM_DRIVERS; i++) {
             if(is_active(drivers[i]) && drivers[i].init_connection != NULL) {
                 drivers[i].init_connection();
+                require_lockdown |= drivers[i].needs_exclusive_storage;
             }
         }
     }
 
+    static bool current_lockdown = false;
+    if(!current_lockdown && require_lockdown) {
+        if(!wait_for_connection_acks()) {
+            queue_broadcast(SYS_USB_DISCONNECTED, 0);
+            usb_core_do_set_config(0);
+            return -1;
+        }
+        set_lockdown(true);
+        current_lockdown = true;
+    } else if(current_lockdown && !require_lockdown) {
+        set_lockdown(false);
+        current_lockdown = false;
+        queue_broadcast(SYS_USB_DISCONNECTED, 0);
+    }
 
     #ifdef HAVE_USB_CHARGING_ENABLE
     usb_charging_maxcurrent_change(usb_charging_maxcurrent());
