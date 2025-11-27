@@ -333,6 +333,7 @@ static struct usb_class_driver drivers[USB_NUM_DRIVERS] =
         .init = usb_iap_init,
         .disconnect = usb_iap_disconnect,
         .transfer_complete = usb_iap_transfer_complete,
+        .fast_transfer_complete = usb_iap_fast_transfer_complete,
         .control_request = usb_iap_control_request,
 #ifdef HAVE_HOTSWAP
         .notify_hotswap = NULL,
