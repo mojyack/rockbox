@@ -1311,6 +1311,9 @@ void usb_core_handle_notify(long id, intptr_t data)
                     usb_core_do_set_config(0);
                     usb_address = 0;
                     usb_state = DEFAULT;
+#ifdef USB_LEGACY_CONTROL_API
+                    num_active_requests = 0;
+#endif
                     usb_charging_maxcurrent_change(usb_charging_maxcurrent());
                     break;
                 }
