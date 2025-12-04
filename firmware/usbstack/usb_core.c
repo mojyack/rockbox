@@ -88,8 +88,9 @@
 #define NUM_CONFIGS 1
 #endif
 
-#define log(fmt, ...) logf("%s:%d " fmt, __FUNCTION__, __LINE__ __VA_OPT__(, __VA_ARGS__));
-
+bool usb_debug = false;
+#undef logf
+#define logf(...) if(usb_debug) _logf(__VA_ARGS__)
 /*-------------------------------------------------------------------------*/
 /* USB protocol descriptors: */
 
@@ -576,7 +577,7 @@ void usb_core_handle_transfer_completion(
 
 void usb_core_enable_driver(int driver, bool enabled)
 {
-    log("enabled driver=%d flag=%d", driver, enabled);
+    logf("enabled driver=%d flag=%d", driver, enabled);
     drivers[driver].enabled = enabled;
 }
 
@@ -644,34 +645,34 @@ static void allocate_interfaces_and_endpoints(void)
     int interface[NUM_CONFIGS] = {0};
 
     for(int i = 0; i < USB_NUM_DRIVERS; i++) {
-        log("driver %d", i);
+        logf("driver %d", i);
         struct usb_class_driver* driver = &drivers[i];
         const uint8_t conf_index = driver->config - 1;
 
         if(!driver->enabled) {
-            log("not enabled");
+            logf("not enabled");
             continue;
         }
 
         /* assign endpoints */
         for(int reqnum = 0; reqnum < driver->ep_allocs_size; reqnum += 1) {
-            log("request %d", reqnum);
+            logf("request %d", reqnum);
             /* find matching ep */
             struct usb_class_driver_ep_allocation* req = &driver->ep_allocs[reqnum];
             req->ep = 0;
             for(int epnum = 1; epnum < USB_NUM_ENDPOINTS; epnum += 1) {
-                log("against ep %d", epnum);
+                logf("against ep %d", epnum);
                 struct usb_drv_ep_spec* spec = &usb_drv_ep_specs[epnum];
                 /* ep type check */
                 const int8_t spec_type = spec->type[req->dir];
                 if(spec_type != req->type && spec_type != USB_ENDPOINT_TYPE_ANY) {
-                    log("!type %d %d", spec_type, req->type);
+                    logf("!type %d %d", spec_type, req->type);
                     continue;
                 }
                 /* free check */
                 struct ep_alloc_state* alloc = &ep_alloc_states[conf_index][epnum];
                 if(alloc->owner[req->dir] != NULL) {
-                    log("!free");
+                    logf("!free");
                     continue;
                 }
 
@@ -682,7 +683,7 @@ static void allocate_interfaces_and_endpoints(void)
                     /* check for the other direction type */
                     if(alloc->owner[!req->dir] != NULL) {
                         /* the other side is allocated */
-                        log("already allocated");
+                        logf("already allocated");
                         continue;
                     }
                 }
@@ -690,7 +691,7 @@ static void allocate_interfaces_and_endpoints(void)
                     /* check for other direction type */
                     if(alloc->owner[!req->dir] != NULL && alloc->type[!req->dir] != req->type) {
                         /* the other side is allocated with another type */
-                        log("another type");
+                        logf("another type");
                         continue;
                     }
                 }
@@ -700,7 +701,7 @@ static void allocate_interfaces_and_endpoints(void)
                 req->ep = ep;
                 alloc->owner[req->dir] = driver;
                 alloc->type[req->dir] = req->type;
-                log("allocated %d", epnum);
+                logf("allocated %d", epnum);
                 break;
             }
             if(req->ep == 0 && !req->optional) {
@@ -796,7 +797,7 @@ static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, v
 
         case USB_DT_OTHER_SPEED_CONFIG:
         case USB_DT_CONFIG: {
-            log("index=%u", index);
+            logf("index=%u", index);
             if(index > NUM_CONFIGS) {
                 logf("invalid config dt index %u", index);
                 break;
@@ -892,7 +893,6 @@ static struct event_queue* ack_queue;
 
 void usb_core_ack_connection(intptr_t data) {
     struct thread_entry *current = __running_self_entry();
-    log("ack %s %ld", current->name, data);
     IF_COP(corelock_lock(&ack_queue_cl));
     if(ack_queue != NULL) {
         queue_post(ack_queue, SYS_USB_CONNECTED_ACK, data);
@@ -924,7 +924,7 @@ static bool wait_for_connection_acks(void) {
         struct queue_event event;
         queue_wait_w_tmo(ack_queue, &event, limit - current_tick);
         if(event.id == SYS_USB_CONNECTED_ACK) {
-            log("ack received %ld %d %d", event.data, acked, expect);
+            logf("ack received %ld %d %d", event.data, acked, expect);
             if(event.data == revision) {
                 acked += 1;
             }
