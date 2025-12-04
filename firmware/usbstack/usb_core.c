@@ -983,6 +983,11 @@ static int usb_core_do_set_config(uint8_t new_config)
             }
         }
         init_deinit_endpoints(usb_config - 1, false);
+
+#ifdef HAVE_PRIORITY_SCHEDULING
+        thread_set_priority(thread_self(), PRIORITY_SYSTEM);
+#endif
+        cancel_cpu_boost();
     }
 
     memset(ep_data, 0, sizeof(ep_data));
@@ -993,6 +998,11 @@ static int usb_core_do_set_config(uint8_t new_config)
 
     /* activate new config */
     if(usb_config != 0) {
+        trigger_cpu_boost();
+#ifdef HAVE_PRIORITY_SCHEDULING
+        thread_set_priority(thread_self(), PRIORITY_REALTIME);
+#endif
+
         init_deinit_endpoints(usb_config - 1, true);
         for(int i = 0; i < USB_NUM_DRIVERS; i++) {
             if(is_active(drivers[i]) && drivers[i].init_connection != NULL) {
