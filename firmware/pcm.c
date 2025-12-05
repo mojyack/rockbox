@@ -23,40 +23,41 @@
 #include "kernel.h"
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-//#define LOGF_ENABLE
+#define LOGF_ENABLE
 #include "logf.h"
 #include "audio.h"
 #include "sound.h"
 #include "general.h"
 #include "pcm-internal.h"
 #include "pcm_mixer.h"
+#include "pcm_sink.h"
 
 /**
  * Aspects implemented in the target-specific portion:
  *
  * ==Playback==
  *   Public -
- *      pcm_postinit
- *      pcm_play_lock
- *      pcm_play_unlock
+ * c    pcm_postinit
+ * d    pcm_play_lock
+ * d    pcm_play_unlock
  *   Semi-private -
- *      pcm_play_dma_complete_callback
- *      pcm_play_dma_status_callback
- *      pcm_play_dma_init
- *      pcm_play_dma_postinit
- *      pcm_play_dma_start
- *      pcm_play_dma_stop
+ * c    pcm_play_dma_complete_callback
+ * c    pcm_play_dma_status_callback
+ * d    pcm_play_dma_init
+ * d    pcm_play_dma_postinit
+ * d    pcm_play_dma_start
+ * d    pcm_play_dma_stop
  *   Data Read/Written within TSP -
- *      pcm_sampr (R)
- *      pcm_fsel (R)
- *      pcm_curr_sampr (R)
- *      pcm_playing (R)
+ * c    pcm_sampr (R)
+ * c    pcm_fsel (R)
+ * c    pcm_curr_sampr (R)
+ * c    pcm_playing (R)
  *
  * ==Playback/Recording==
  *   Public -
- *      pcm_dma_addr
+ * d    pcm_dma_addr
  *   Semi-private -
- *      pcm_dma_apply_settings
+ * d    pcm_dma_apply_settings
  *
  * ==Recording==
  *   Public -
@@ -81,6 +82,12 @@
 /* 'true' when all stages of pcm initialization have completed */
 static bool pcm_is_ready = false;
 
+static struct pcm_sink* sinks[1] = {
+    [PCM_SINK_HARDWARE] = &hardware_pcm_sink,
+};
+static uint8_t cur_sink = 0;
+static struct mutex sink_mutex; /* protects sinks and cur_sink */
+
 /* The registered callback function to ask for more mp3 data */
 volatile pcm_play_callback_type
     pcm_callback_for_more SHAREDBSS_ATTR = NULL;
@@ -89,14 +96,7 @@ volatile pcm_status_callback_type
     pcm_play_status_callback SHAREDBSS_ATTR = NULL;
 /* PCM playback state */
 volatile bool pcm_playing SHAREDBSS_ATTR = false;
-/* samplerate of currently playing audio - undefined if stopped */
-unsigned long pcm_curr_sampr SHAREDBSS_ATTR = 0;
-/* samplerate waiting to be set */
-unsigned long pcm_sampr SHAREDBSS_ATTR = HW_SAMPR_DEFAULT;
-/* samplerate frequency selection index */
-int pcm_fsel SHAREDBSS_ATTR = HW_FREQ_DEFAULT;
 
-static void pcm_play_data_start_int(const void *addr, size_t size);
 void pcm_play_stop_int(void);
 
 #if !defined(HAVE_SW_VOLUME_CONTROL) || defined(PCM_SW_VOLUME_UNBUFFERED)
@@ -108,12 +108,16 @@ static inline void pcm_play_dma_start_int(const void *addr, size_t size)
     /* Smoothed transition might not have happened so sync now */
     pcm_sync_pcm_factors();
 #endif
-    pcm_play_dma_start(addr, size);
+    sinks[cur_sink]->play(addr, size);
 }
 
 static inline void pcm_play_dma_stop_int(void)
 {
-    pcm_play_dma_stop();
+    sinks[cur_sink]->stop();
+}
+
+struct pcm_sink* get_current_sink(void) {
+    return sinks[cur_sink];
 }
 
 bool pcm_play_dma_complete_callback(enum pcm_dma_status status,
@@ -123,33 +127,15 @@ bool pcm_play_dma_complete_callback(enum pcm_dma_status status,
     if (status < PCM_DMAST_OK)
         status = pcm_play_dma_status_callback(status);
 
-    if (status >= PCM_DMAST_OK && pcm_get_more_int(addr, size))
+    if (status >= PCM_DMAST_OK && pcm_get_more_int(addr, size)) {
         return true;
+    }
 
     /* Error, callback missing or no more DMA to do */
     pcm_play_stop_int();
     return false;
 }
 #endif /* !HAVE_SW_VOLUME_CONTROL || PCM_SW_VOLUME_UNBUFFERED */
-
-static void pcm_play_data_start_int(const void *addr, size_t size)
-{
-    ALIGN_AUDIOBUF(addr, size);
-
-    if ((addr && size) || pcm_get_more_int(&addr, &size))
-    {
-        pcm_apply_settings();
-        logf(" pcm_play_dma_start_int");
-        pcm_play_dma_start_int(addr, size);
-        pcm_playing = true;
-    }
-    else
-    {
-        /* Force a stop */
-        logf(" pcm_play_stop_int");
-        pcm_play_stop_int();
-    }
-}
 
 void pcm_play_stop_int(void)
 {
@@ -223,7 +209,9 @@ void pcm_do_peak_calculation(struct pcm_peaks *peaks, bool active,
 
     if (active)
     {
-        int framecount = peaks->period*pcm_curr_sampr / HZ;
+        struct pcm_sink* sink = sinks[cur_sink];
+        unsigned long sampr = sink->samprs[sink->configured_sampr_index];
+        int framecount = peaks->period * sampr / HZ;
         count = MIN(framecount, count);
 
         if (count > 0)
@@ -247,16 +235,29 @@ bool pcm_is_playing(void)
  * interface
  */
 
+void pcm_play_lock(void) {
+    mutex_lock(&sink_mutex);
+    sinks[cur_sink]->lock();
+    /* hold sink_mutex until pcm_play_unlock() */
+}
+
+void pcm_play_unlock(void) {
+    sinks[cur_sink]->unlock();
+    mutex_unlock(&sink_mutex);
+}
+
 /* This should only be called at startup before any audio playback or
    recording is attempted */
 void pcm_init(void)
 {
     logf("pcm_init");
 
-    pcm_set_frequency(HW_SAMPR_DEFAULT);
-
-    logf(" pcm_play_dma_init");
-    pcm_play_dma_init();
+    mutex_init(&sink_mutex);
+    for(size_t i = 0; i < ARRAYLEN(sinks); i += 1) {
+        sinks[i]->pending_sampr_index = sinks[i]->default_sampr_index;
+        sinks[i]->configured_sampr_index = -1;
+        sinks[i]->init();
+    }
 }
 
 /* Finish delayed init */
@@ -264,9 +265,9 @@ void pcm_postinit(void)
 {
     logf("pcm_postinit");
 
-    logf(" pcm_play_dma_postinit");
-
-    pcm_play_dma_postinit();
+    for(size_t i = 0; i < ARRAYLEN(sinks); i += 1) {
+        sinks[i]->postinit();
+    }
 
     pcm_is_ready = true;
 }
@@ -287,8 +288,20 @@ void pcm_play_data(pcm_play_callback_type get_more,
     pcm_callback_for_more = get_more;
     pcm_play_status_callback = status_cb;
 
-    logf(" pcm_play_data_start_int");
-    pcm_play_data_start_int(start, size);
+    ALIGN_AUDIOBUF(start, size);
+    if ((start && size) || pcm_get_more_int(&start, &size))
+    {
+        pcm_apply_settings();
+        logf(" pcm_play_dma_start_int");
+        pcm_play_dma_start_int(start, size);
+        pcm_playing = true;
+    }
+    else
+    {
+        /* Force a stop */
+        logf(" pcm_play_stop_int");
+        pcm_play_stop_int();
+    }
 
     pcm_play_unlock();
 }
@@ -329,20 +342,22 @@ void pcm_set_frequency(unsigned int samplerate)
     samplerate = pcm_sampr_to_hw_sampr(samplerate, type);
 #endif /* CONFIG_SAMPR_TYPES */
 
-    index = round_value_to_list32(samplerate, hw_freq_sampr,
-                                  HW_NUM_FREQ, false);
+    mutex_lock(&sink_mutex);
+    struct pcm_sink* sink = sinks[cur_sink];
+    index = round_value_to_list32(samplerate, sink->samprs, sink->num_samprs, false);
 
-    if (samplerate != hw_freq_sampr[index])
-        index = HW_FREQ_DEFAULT; /* Invalid = default */
+    if (samplerate != sink->samprs[index])
+        index = sink->default_sampr_index; /* Invalid = default */
 
-    pcm_sampr = hw_freq_sampr[index];
-    pcm_fsel = index;
+    sink->pending_sampr_index = index;
+    mutex_unlock(&sink_mutex);
 }
 
 /* return last-set frequency */
 unsigned int pcm_get_frequency(void)
 {
-    return pcm_sampr;
+    struct pcm_sink* sink = sinks[cur_sink];
+    return sink->pending_sampr_index;
 }
 
 /* apply pcm settings to the hardware */
@@ -352,12 +367,14 @@ void pcm_apply_settings(void)
 
     pcm_wait_for_init();
 
-    if (pcm_sampr != pcm_curr_sampr)
-    {
+    mutex_lock(&sink_mutex);
+    struct pcm_sink* sink = sinks[cur_sink];
+    if(sink->pending_sampr_index != sink->configured_sampr_index) {
         logf(" pcm_dma_apply_settings");
-        pcm_dma_apply_settings();
-        pcm_curr_sampr = pcm_sampr;
+        sink->set_sampr(sink->pending_sampr_index);
+        sink->configured_sampr_index = sink->pending_sampr_index;
     }
+    mutex_unlock(&sink_mutex);
 }
 
 #ifdef HAVE_RECORDING
