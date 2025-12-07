@@ -25,10 +25,6 @@
 #include "panic.h"
 #include "disk.h"
 
-/* for Event */
-#include "kernel/kernel-internal.h"
-#include "kernel/thread-internal.h"
-
 #define LOGF_ENABLE
 #include "logf.h"
 
@@ -558,7 +554,6 @@ void usb_core_handle_transfer_completion(
     completion_handler_t handler;
     int ep = event->endpoint;
 
-    struct usb_ctrlrequest* req = event->data[0];
     switch(ep) {
         case EP_CONTROL:
             logf("ctrl handled %ld req=0x%x",
@@ -893,7 +888,6 @@ IF_COP( static struct corelock ack_queue_cl; )
 static struct event_queue* ack_queue;
 
 void usb_core_ack_connection(intptr_t data) {
-    struct thread_entry *current = __running_self_entry();
     IF_COP(corelock_lock(&ack_queue_cl));
     if(ack_queue != NULL) {
         queue_post(ack_queue, SYS_USB_CONNECTED_ACK, data);
