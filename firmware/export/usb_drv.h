@@ -109,6 +109,33 @@ int usb_drv_deinit_endpoint(int endpoint);
 int usb_drv_get_frame_number(void);
 #endif
 
+#if USB_BATCH_SLOTS > 0
+
+/* batched request interface is to achieve super-high-frequency isochronous transactions.
+ * this interface allows submitting multiple transaction requests at once,
+ * so that minimize the device controller's idling time. */
+
+/* called when usb system requires more buffer */
+typedef void(*usb_drv_batch_get_more)(const void** ptr, size_t* len);
+
+/* prepare request queue */
+int usb_drv_batch_init(int ep, usb_drv_batch_get_more get_more);
+/* destroy request queue */
+int usb_drv_batch_deinit(void);
+/* start processing */
+int usb_drv_batch_start(void);
+/* stop processing */
+int usb_drv_batch_stop(void);
+/* tell the driver to pull data.
+ * probably calls get_more callback. */
+int usb_drv_batch_fill_more(void);
+/* count free request queue elements */
+int usb_drv_batch_count_available_requests(int max);
+/* debug only */
+int usb_drv_dump_tds(void);
+
+#endif
+
 /* USB_STRING_INITIALIZER(u"Example String") */
 #define USB_STRING_INITIALIZER(S) { \
     sizeof(struct usb_string_descriptor) + sizeof(S) - sizeof(*S), \

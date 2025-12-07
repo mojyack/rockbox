@@ -1362,6 +1362,11 @@ Lyre prototype 1 */
 //#define USB_HAS_INTERRUPT -- seems to be broken
 #endif /* CONFIG_USBOTG */
 
+/* define optional apis */
+#if CONFIG_USBOTG == USBOTG_ARC
+#define USB_BATCH_SLOTS 16
+#endif
+
 /* define the class drivers to enable */
 #ifdef BOOTLOADER
 
@@ -1393,7 +1398,7 @@ Lyre prototype 1 */
 #define USB_ENABLE_AUDIO
 #endif
 
-#if defined(USB_ENABLE_HID) && defined(USB_ENABLE_AUDIO)
+#if defined(USB_ENABLE_HID) && defined(USB_ENABLE_AUDIO) && USB_BATCH_SLOTS > 0
 #define USB_ENABLE_IAP
 #endif
 
