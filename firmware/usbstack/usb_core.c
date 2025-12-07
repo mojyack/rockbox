@@ -558,6 +558,7 @@ void usb_core_handle_transfer_completion(
     completion_handler_t handler;
     int ep = event->endpoint;
 
+    struct usb_ctrlrequest* req = event->data[0];
     switch(ep) {
         case EP_CONTROL:
             logf("ctrl handled %ld req=0x%x",
@@ -985,9 +986,14 @@ static int usb_core_do_set_config(uint8_t new_config)
         thread_set_priority(thread_self(), PRIORITY_SYSTEM);
 #endif
         cancel_cpu_boost();
+
+        /* clear any pending transfer completions,
+         * because they are depend on contents of ep_data */
+        usb_clear_pending_signal_transfer_completion();
+        /* reset endpoint states */
+        memset(ep_data, 0, sizeof(ep_data));
     }
 
-    memset(ep_data, 0, sizeof(ep_data));
     usb_config = new_config;
     usb_state = usb_config == 0 ? ADDRESS : CONFIGURED;
 

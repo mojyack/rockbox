@@ -261,6 +261,13 @@ void usb_signal_transfer_completion(
     queue_post(&usb_queue, USB_TRANSFER_COMPLETION, (intptr_t)event_data);
 }
 
+void usb_clear_pending_signal_transfer_completion(void)
+{
+    while (queue_peek_ex(&usb_queue, NULL,
+                         1 | QPEEK_REMOVE_EVENTS,
+                         QPEEK_FILTER1(USB_TRANSFER_COMPLETION)));
+}
+
 void usb_signal_notify(long id, intptr_t data)
 {
     queue_post(&usb_queue, id, data);
