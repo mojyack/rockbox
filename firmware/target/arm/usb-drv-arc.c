@@ -30,7 +30,7 @@
 #include "panic.h"
 #include "usb_drv.h"
 
-/*#define LOGF_ENABLE*/
+#define LOGF_ENABLE
 #include "logf.h"
 
 /* USB device mode registers (Little Endian) */
@@ -753,8 +753,12 @@ int usb_drv_batch_start(void) {
     const int pipe = ep_to_pipe_index(batch_user);
     struct queue_head* const qh = &qh_array[pipe];
 
+    qh->curr_dtd_ptr = (unsigned int)&batch_td_array[0]; /* to pass error check in sof_received */
     qh->dtd.next_td_ptr = (unsigned int)&batch_td_array[0];
     qh->dtd.size_ioc_sts = 0;
+
+    /* fill tds */
+    batch_fill_tds();
 
     /* monitor sof */
     REG_USBINTR |= USBINTR_SOF_EN;
@@ -784,48 +788,7 @@ int usb_drv_batch_stop(void) {
     return 0;
 }
 
-int usb_drv_batch_fill_more(void) {
-    const int oldlevel = disable_irq_save();
-
-    int filled = 0;
-    while(!(batch_td_array[batch_write_cursor].size_ioc_sts & DTD_STATUS_ACTIVE)) {
-        /* batch_get_more may call batch_stop() through:
-        *  - batch_get_more()
-        *   - pcm_play_dma_complete_callback()
-        *    - sink_stop()
-        *     - usb_drv_batch_stop() */
-        void* ptr;
-        size_t len;
-        batch_get_more(&ptr, &len);
-        if(batch_stopped) {
-            goto exit;
-        }
-        if(len == 0) {
-            break;
-        }
-
-        struct transfer_descriptor* td = &batch_td_array[batch_write_cursor];
-        td_set_buf_ptr(td, ptr);
-        td->size_ioc_sts = (len << DTD_LENGTH_BIT_POS) | DTD_STATUS_ACTIVE;
-        batch_write_cursor = (batch_write_cursor + 1)  % USB_NUM_BATCH_SLOTS;
-        filled += 1;
-    }
-
-    if(filled == 0) {
-        goto exit;
-    }
-
-    const int pipe = ep_to_pipe_index(batch_user);
-    const unsigned int mask = pipe2mask[pipe];
-    REG_ENDPTPRIME |= mask;
-
-exit:
-    restore_irq(oldlevel);
-
-    return filled;
-}
-
-#if defined(ENABLE_LOGF) && defined(ROCKBOX_HAS_LOGF)
+#if defined(LOGF_ENABLE) && defined(ROCKBOX_HAS_LOGF)
 int usb_drv_dump_tds(void) {
     const int pipe = ep_to_pipe_index(batch_user);
     struct queue_head* const qh = &qh_array[pipe];
@@ -833,7 +796,7 @@ int usb_drv_dump_tds(void) {
     void* current = (void*)qh->curr_dtd_ptr;
     void* next = (void*)qh->dtd.next_td_ptr;
 
-    logf("==== td dump %ld n=0x%X c=0x%X ====", current_tick, next, current);
+    logf("==== td dump %ld n=%p c=%p ====", current_tick, next, current);
     int active = 0;
     for(int i = 0; i < USB_BATCH_SLOTS; i += 1) {
         struct transfer_descriptor* td = &batch_td_array[i];
@@ -868,7 +831,11 @@ static void sof_received(void) {
     }
 
     /* do refill */
-    usb_drv_batch_fill_more();
+    if(batch_fill_tds()) {
+        const int pipe = ep_to_pipe_index(batch_user);
+        const unsigned int mask = pipe2mask[pipe];
+        REG_ENDPTPRIME |= mask;
+    }
 }
 
 /*-------------------------------------------------------------------------*/

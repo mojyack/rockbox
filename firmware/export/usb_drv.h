@@ -126,9 +126,6 @@ int usb_drv_batch_deinit(void);
 int usb_drv_batch_start(void);
 /* stop processing */
 int usb_drv_batch_stop(void);
-/* tell the driver to pull data.
- * probably calls get_more callback. */
-int usb_drv_batch_fill_more(void);
 /* count free request queue elements */
 int usb_drv_batch_count_available_requests(int max);
 /* debug only */
