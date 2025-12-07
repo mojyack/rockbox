@@ -138,7 +138,7 @@ void * pcm_dma_addr(void *addr);
 #endif
 
 extern volatile bool pcm_playing;
-struct pcm_sink* get_current_sink(void);
+struct pcm_sink* pcm_get_current_sink(void);
 
 #ifdef HAVE_RECORDING
 

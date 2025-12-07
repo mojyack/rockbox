@@ -23,7 +23,7 @@
 #include "kernel.h"
 
 /* Define LOGF_ENABLE to enable logf output in this file */
-#define LOGF_ENABLE
+//#define LOGF_ENABLE
 #include "logf.h"
 #include "audio.h"
 #include "sound.h"
@@ -82,8 +82,15 @@
 /* 'true' when all stages of pcm initialization have completed */
 static bool pcm_is_ready = false;
 
-static struct pcm_sink* sinks[1] = {
+#ifdef USB_ENABLE_IAP
+extern struct pcm_sink iap_pcm_sink;
+#endif
+
+static struct pcm_sink* sinks[] = {
     [PCM_SINK_HARDWARE] = &hardware_pcm_sink,
+#ifdef USB_ENABLE_IAP
+    [PCM_SINK_IAP] = &iap_pcm_sink,
+#endif
 };
 static uint8_t cur_sink = 0;
 static struct mutex sink_mutex; /* protects sinks and cur_sink */
@@ -111,12 +118,7 @@ static inline void pcm_play_dma_start_int(const void *addr, size_t size)
     sinks[cur_sink]->play(addr, size);
 }
 
-static inline void pcm_play_dma_stop_int(void)
-{
-    sinks[cur_sink]->stop();
-}
-
-struct pcm_sink* get_current_sink(void) {
+struct pcm_sink* pcm_get_current_sink(void) {
     return sinks[cur_sink];
 }
 
@@ -139,7 +141,7 @@ bool pcm_play_dma_complete_callback(enum pcm_dma_status status,
 
 void pcm_play_stop_int(void)
 {
-    pcm_play_dma_stop_int();
+    sinks[cur_sink]->stop();
     pcm_callback_for_more = NULL;
     pcm_play_status_callback = NULL;
     pcm_playing = false;
@@ -357,7 +359,7 @@ void pcm_set_frequency(unsigned int samplerate)
 unsigned int pcm_get_frequency(void)
 {
     struct pcm_sink* sink = sinks[cur_sink];
-    return sink->pending_sampr_index;
+    return sink->samprs[sink->pending_sampr_index];
 }
 
 /* apply pcm settings to the hardware */
@@ -375,6 +377,43 @@ void pcm_apply_settings(void)
         sink->configured_sampr_index = sink->pending_sampr_index;
     }
     mutex_unlock(&sink_mutex);
+}
+
+bool pcm_switch_sink(size_t sink) {
+    logf("pcm_switch_sink %d to %d", cur_sink, sink);
+    if(sink >= ARRAYLEN(sinks)) {
+        return false;
+    }
+
+    mutex_lock(&sink_mutex);
+
+    if(cur_sink == sink) {
+        mutex_unlock(&sink_mutex);
+        return true;
+    }
+    /* save current sink before switching */
+    struct pcm_sink* old_sink = sinks[cur_sink];
+    /* update sink index */
+    cur_sink = sink;
+    /* synchronize frequency */
+    unsigned long cur_freq = old_sink->samprs[old_sink->pending_sampr_index];
+    pcm_set_frequency(cur_freq);
+    pcm_apply_settings();
+    /* when playing, continue playing on new sink */
+    if(pcm_playing) {
+        old_sink->stop();
+        /* need more */
+        const void *start;
+        size_t size;
+        if(pcm_get_more_int(&start, &size)) {
+            pcm_play_dma_start_int(start, size);
+        } else {
+            pcm_play_stop_int();
+        }
+    }
+
+    mutex_unlock(&sink_mutex);
+    return true;
 }
 
 #ifdef HAVE_RECORDING
