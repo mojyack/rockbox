@@ -51,7 +51,7 @@
 #include "general.h"
 #include "rbpaths.h"
 
-#define LOGF_ENABLE
+/*#define LOGF_ENABLE*/
 #include "logf.h"
 
 #if (CONFIG_PLATFORM & PLATFORM_SDL)
@@ -125,7 +125,7 @@ struct codec_api ci = {
     debugf,
 #endif
 #ifdef ROCKBOX_HAS_LOGF
-    logf,
+    _logf,
 #endif
 
     (void *)qsort,
