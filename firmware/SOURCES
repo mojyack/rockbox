@@ -935,9 +935,8 @@ usbstack/usb_charging_only.c
 usbstack/usb_hid.c
 #endif
 #ifdef USB_ENABLE_IAP
-usbstack/usb_iap.c
+usbstack/iap/audio.c
 usbstack/iap/buffer.c
-usbstack/iap/platform.c
 usbstack/iap/debug.c
 usbstack/iap/libiap/debug.c
 usbstack/iap/libiap/fid-token-values.c
@@ -945,6 +944,8 @@ usbstack/iap/libiap/hid.c
 usbstack/iap/libiap/iap.c
 usbstack/iap/libiap/notification.c
 usbstack/iap/libiap/span.c
+usbstack/iap/platform.c
+usbstack/usb_iap.c
 #endif
 #if CONFIG_USBOTG == USBOTG_M66591
 drivers/m66591.c
