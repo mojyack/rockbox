@@ -181,6 +181,9 @@ bool logfdisplay(void)
             case ACTION_STD_PREVREPEAT:
                 user_index--;
                 break;
+            case ACTION_STD_MENU:
+                user_index-=30;
+                break;
             case ACTION_STD_OK:
                 user_index = 0;
                 break;
