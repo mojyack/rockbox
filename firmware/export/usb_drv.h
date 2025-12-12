@@ -128,8 +128,6 @@ int usb_drv_batch_start(void);
 int usb_drv_batch_stop(void);
 /* count free request queue elements */
 int usb_drv_batch_count_available_requests(int max);
-/* debug only */
-int usb_drv_dump_tds(void);
 
 #endif
 

@@ -789,8 +789,21 @@ int usb_drv_batch_stop(void) {
 }
 
 #if defined(LOGF_ENABLE) && defined(ROCKBOX_HAS_LOGF)
-int usb_drv_dump_tds(void) {
-    const int pipe = ep_to_pipe_index(batch_user);
+void usb_drv_dump_regs(void) {
+    logf("==== register dump %ld ====", current_tick);
+    logf("USBSTS         0x%08X", REG_USBSTS);
+    logf("ENDPTSETUPSTAT 0x%08X", REG_ENDPTSETUPSTAT);
+    logf("ENDPTPRIME     0x%08X", REG_ENDPTPRIME);
+    logf("ENDPTFLUSH     0x%08X", REG_ENDPTFLUSH);
+    logf("ENDPTSTATUS    0x%08X", REG_ENDPTSTATUS);
+    logf("ENDPTCOMPLETE  0x%08X", REG_ENDPTCOMPLETE);
+    logf("ENDPTCTRL0     0x%08X", REG_ENDPTCTRL0);
+    logf("ENDPTCTRL1     0x%08X", REG_ENDPTCTRL1);
+    logf("ENDPTCTRL2     0x%08X", REG_ENDPTCTRL2);
+}
+
+void usb_drv_dump_tds(int ep) {
+    const int pipe = ep_to_pipe_index(ep);
     struct queue_head* const qh = &qh_array[pipe];
 
     void* current = (void*)qh->curr_dtd_ptr;
@@ -804,13 +817,15 @@ int usb_drv_dump_tds(void) {
         char sts[] = {
             td == current ? 'c' : ' ',
             td == next ? 'n' : ' ',
-            i == batch_write_cursor ? 'w' : ' ',
+            ep == batch_user && i == batch_write_cursor ? 'w' : ' ',
             '\0',
         };
         logf("%s td[%02d] status=0x%08X len=%d", sts, i, td->size_ioc_sts, len);
-        active += !!(batch_td_array[i].size_ioc_sts & DTD_STATUS_ACTIVE);
     }
-    return active;
+}
+
+void usb_drv_batch_dump_tds(void) {
+    usb_drv_dump_tds(batch_user);
 }
 #endif
 
