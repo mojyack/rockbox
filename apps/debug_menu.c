@@ -2807,14 +2807,31 @@ static bool disable_usb_debug(void) {
     return false;
 }
 
+void usb_drv_dump_regs(void);
+void usb_drv_dump_tds(int ep);
+
+static bool dump_regs(void) {
+    usb_drv_dump_regs();
+    return false;
+}
+
+static bool dump_tds(void) {
+    usb_drv_dump_tds(USB_DIR_OUT);
+    return false;
+}
+
+bool usb_core_dump_request_data(void);
+
 /****** The menu *********/
 static const struct {
-    unsigned char *desc; /* string or ID */
+    const char *desc; /* string or ID */
     bool (*function) (void); /* return true if USB was connected */
 } menuitems[] = {
         {"Show Log File", logfdisplay },
         { "Enable USB Debug", enable_usb_debug },
         { "Disable USB Debug", disable_usb_debug },
+        { "Dump TDs", dump_tds },
+        { "Dump Regs", dump_regs },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \
