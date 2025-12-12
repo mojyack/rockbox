@@ -47,6 +47,7 @@
 #include "settings.h"
 #include "audiohw.h"
 #include "general.h"
+#include "iap-usb.h"
 #include <stdio.h>
 
 #ifdef HAVE_TAGCACHE
@@ -1422,6 +1423,7 @@ static void audio_playlist_track_change(void)
     {
         send_track_event(PLAYBACK_EVENT_TRACK_CHANGE,
                          track_event_flags, id3);
+        iap_on_track_playback_index(playlist_get_display_index() - 1, false);
     }
 
     position_key = pcmbuf_get_position_key();
@@ -2329,6 +2331,8 @@ static int audio_finish_load_track(struct track_info *infop)
            by the time PLAYBACK_EVENT_TRACK_CHANGE is sent */
         send_track_event(PLAYBACK_EVENT_CUR_TRACK_READY, 0,
                          id3_get(PLAYING_ID3));
+        /* Also send pending notification */
+        iap_on_track_playback_index(playlist_get_display_index() - 1, true);
     }
 
 #ifdef HAVE_CODEC_BUFFERING
@@ -2753,6 +2757,7 @@ static void audio_finalise_track_change(void)
         if (single_mode_do_pause(info.id3_hid))
         {
             play_status = PLAY_PAUSED;
+            iap_on_play_status(play_status);
             pcmbuf_pause(true);
         }
     }
@@ -3086,6 +3091,7 @@ static void audio_start_playback(const struct audio_resume_info *resume_info,
 
         /* Update our state */
         play_status = PLAY_PLAYING;
+        iap_on_play_status(play_status);
     }
 
     /* Codec's position should be available as soon as it knows it */
@@ -3173,6 +3179,7 @@ static void audio_stop_playback(void)
     /* Update our state */
     ff_rw_mode = false;
     play_status = PLAY_STOPPED;
+    iap_on_play_status(play_status);
 
     wipe_track_metadata(true);
 #ifdef HAVE_ALBUMART
@@ -3194,6 +3201,7 @@ static void audio_on_pause(bool pause)
         return;
 
     play_status = pause ? PLAY_PAUSED : PLAY_PLAYING;
+    iap_on_play_status(play_status);
 
     if (!pause && codec_skip_pending)
     {
@@ -3835,6 +3843,7 @@ void audio_pcmbuf_position_callback(unsigned long elapsed, off_t offset,
         struct mp3entry *id3 = id3_get(PLAYING_ID3);
         id3->elapsed = elapsed;
         id3->offset = offset;
+        iap_on_track_time_position(elapsed);
     }
 }
 

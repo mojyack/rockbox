@@ -66,6 +66,7 @@
 #endif
 #include "playlist.h"
 #include "tree.h"
+#include "iap-usb.h"
 
 #include "voice_thread.h"
 
@@ -781,15 +782,17 @@ static void shuffle_playlist_callback(bool shuffle)
             }
         }
     }
+    iap_on_shuffle_state(shuffle);
 }
 
 static void repeat_mode_callback(int repeat)
 {
+    (void)repeat;
     if ((audio_status() & AUDIO_STATUS_PLAY) == AUDIO_STATUS_PLAY)
     {
         audio_flush_and_reload_tracks();
     }
-    (void)repeat;
+    iap_on_repeat_state(repeat);
 }
 
 static void treesort_callback(int value)
