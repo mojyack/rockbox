@@ -166,6 +166,7 @@ static const struct usb_string_descriptor* const usb_strings[USB_STRING_INDEX_MA
 static int usb_address = 0;
 static int usb_config = 0;
 static bool initialized = false;
+static volatile bool bus_reset_pending = false;
 static enum { DEFAULT, ADDRESS, CONFIGURED } usb_state;
 
 #ifdef HAVE_USB_CHARGING_ENABLE
@@ -1246,12 +1247,30 @@ static void usb_core_control_request_handler(struct usb_ctrlrequest* req, void* 
     }
 }
 
+static void do_bus_reset(void) {
+    usb_address = 0;
+    usb_state = DEFAULT;
+#ifdef USB_LEGACY_CONTROL_API
+    num_active_requests = 0;
+#endif
+    usb_charging_maxcurrent_change(usb_charging_maxcurrent());
+    bus_reset_pending = false;
+}
+
 /* called by usb_drv_int() */
 void usb_core_bus_reset(void)
 {
     logf("usb_core: bus reset");
-    /* cannot call do_set_config in interrupt handler, defer it to usb thread */
-    usb_signal_notify(USB_NOTIFY_CLASS_DRIVER, 0xff);
+    if(bus_reset_pending) {
+        return;
+    }
+    bus_reset_pending = true;
+    if(usb_config == 0) {
+        do_bus_reset();
+    } else {
+        /* need to disconnect class drivers, defer it to usb thread */
+        usb_signal_notify(USB_NOTIFY_CLASS_DRIVER, 0xff);
+    }
 }
 
 /* called by usb_drv_transfer_completed() */
@@ -1304,14 +1323,9 @@ void usb_core_handle_notify(long id, intptr_t data)
         case USB_NOTIFY_CLASS_DRIVER: {
                 uint8_t index = data & 0xff;
                 if(index == 0xff) {
-                    /* bus reset */
+                    /* bus reset, see usb_core_bus_reset() */
                     usb_core_do_set_config(0);
-                    usb_address = 0;
-                    usb_state = DEFAULT;
-#ifdef USB_LEGACY_CONTROL_API
-                    num_active_requests = 0;
-#endif
-                    usb_charging_maxcurrent_change(usb_charging_maxcurrent());
+                    do_bus_reset();
                     break;
                 }
                 if(index >= USB_NUM_DRIVERS) {
@@ -1338,7 +1352,7 @@ void usb_core_control_request(struct usb_ctrlrequest* req, void* reqdata)
     completion_event->data[1] = reqdata;
     completion_event->status = 0;
     completion_event->length = 0;
-    logf("ctrl received %ld, req=0x%x", current_tick, req->bRequest);
+    logf("ctrl received %ld, req=0x%x type=0x%x len=%d", current_tick, req->bRequest, req->bRequestType, req->wLength);
     usb_signal_transfer_completion(completion_event);
 }
 
@@ -1356,7 +1370,7 @@ void usb_core_control_complete(int status)
 void usb_core_legacy_control_request(struct usb_ctrlrequest* req)
 {
     /* Only submit non-overlapping requests */
-    if (num_active_requests++ == 0)
+    if (!bus_reset_pending && num_active_requests++ == 0)
     {
         buffered_request = *req;
         active_request = &buffered_request;
