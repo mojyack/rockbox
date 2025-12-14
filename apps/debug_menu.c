@@ -2796,17 +2796,6 @@ static bool dbg_bootflash_dump(void) {
 }
 #endif
 
-extern bool usb_debug;
-static bool enable_usb_debug(void) {
-    usb_debug = true;
-    return false;
-}
-
-static bool disable_usb_debug(void) {
-    usb_debug = false;
-    return false;
-}
-
 void usb_drv_dump_regs(void);
 void usb_drv_dump_tds(int ep);
 
@@ -2815,12 +2804,15 @@ static bool dump_regs(void) {
     return false;
 }
 
-static bool dump_tds(void) {
+static bool dump_tds_out(void) {
     usb_drv_dump_tds(USB_DIR_OUT);
     return false;
 }
 
-bool usb_core_dump_request_data(void);
+static bool dump_tds_in(void) {
+    usb_drv_dump_tds(USB_DIR_IN);
+    return false;
+}
 
 /****** The menu *********/
 static const struct {
@@ -2828,10 +2820,9 @@ static const struct {
     bool (*function) (void); /* return true if USB was connected */
 } menuitems[] = {
         {"Show Log File", logfdisplay },
-        { "Enable USB Debug", enable_usb_debug },
-        { "Disable USB Debug", disable_usb_debug },
-        { "Dump TDs", dump_tds },
-        { "Dump Regs", dump_regs },
+        //{ "Dump OUT TDs", dump_tds_out },
+        //{ "Dump IN TDs", dump_tds_in },
+        //{ "Dump Regs", dump_regs },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \

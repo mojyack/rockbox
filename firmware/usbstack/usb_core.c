@@ -25,7 +25,7 @@
 #include "panic.h"
 #include "disk.h"
 
-#define LOGF_ENABLE
+//#define LOGF_ENABLE
 #include "logf.h"
 
 #include "usb.h"
@@ -84,9 +84,6 @@
 #define NUM_CONFIGS 1
 #endif
 
-bool usb_debug = false;
-#undef logf
-#define logf(...) if(usb_debug) _logf(__VA_ARGS__)
 /*-------------------------------------------------------------------------*/
 /* USB protocol descriptors: */
 
