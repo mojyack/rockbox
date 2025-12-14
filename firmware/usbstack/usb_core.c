@@ -338,6 +338,7 @@ static struct usb_class_driver drivers[USB_NUM_DRIVERS] =
 #endif
         .set_interface = usb_iap_set_interface,
         .get_interface = usb_iap_get_interface,
+        .get_max_packet_size = usb_iap_get_max_packet_size,
         .notify_event = usb_iap_notify_event,
     },
 #endif
@@ -612,18 +613,23 @@ static void init_deinit_endpoints(uint8_t conf_index, bool init) {
             if(alloc->owner[dir] == NULL) {
                 continue;
             }
+            struct usb_class_driver* driver = alloc->owner[dir];
             int ep = epnum | (dir == DIR_OUT ? USB_DIR_OUT : USB_DIR_IN);
-            int ret = init ?
-                usb_drv_init_endpoint(ep, alloc->type[dir]) :
-                usb_drv_deinit_endpoint(ep);
+            int ret;
+            if(init) {
+                int ps = driver->get_max_packet_size ? driver->get_max_packet_size(ep) : -1;
+                ret = usb_drv_init_endpoint(ep, alloc->type[dir], ps);
+            } else {
+                ret = usb_drv_deinit_endpoint(ep);
+            }
             if(ret) {
                 logf("usb_core: usb_drv_%s_endpoint failed ep=%d dir=%d", init ? "init" : "deinit", epnum, dir);
                 continue;
             }
             if(init) {
-                ep_data[epnum].completion_handler[dir] = alloc->owner[dir]->transfer_complete;
-                ep_data[epnum].fast_completion_handler[dir] = alloc->owner[dir]->fast_transfer_complete;
-                ep_data[epnum].control_handler[dir] = alloc->owner[dir]->control_request;
+                ep_data[epnum].completion_handler[dir] = driver->transfer_complete;
+                ep_data[epnum].fast_completion_handler[dir] = driver->fast_transfer_complete;
+                ep_data[epnum].control_handler[dir] = driver->control_request;
             }
         }
     }
