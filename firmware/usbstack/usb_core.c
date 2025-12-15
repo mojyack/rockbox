@@ -238,7 +238,7 @@ static void usb_core_control_request_handler(struct usb_ctrlrequest* req, void* 
 
 static unsigned char response_data[256] USB_DEVBSS_ATTR;
 
-#define is_active(driver) ((driver)->enabled && (driver)->config == usb_config)
+#define is_active(driver) ((driver)->enabled && !(driver)->error && (driver)->config == usb_config)
 #define has_if(driver, interface) ((interface) >= (driver)->first_interface && (interface) < (driver)->last_interface)
 
 /** NOTE Serial Number
@@ -401,6 +401,7 @@ void usb_core_init(void)
      * yet which drivers will be enabled */
     for(i = 0; i < USB_NUM_DRIVERS; i++) {
         drivers[i]->enabled = false;
+        drivers[i]->error = false;
         drivers[i]->first_interface = 0;
         drivers[i]->last_interface = 0;
         if(drivers[i]->init != NULL) {
@@ -475,7 +476,7 @@ void usb_core_hotswap_event(int volume, bool inserted)
 {
     int i;
     for(i = 0; i < USB_NUM_DRIVERS; i++)
-        if(drivers[i]->enabled && drivers[i]->notify_hotswap != NULL)
+        if(is_active(drivers[i]) && drivers[i]->notify_hotswap != NULL)
             drivers[i]->notify_hotswap(volume, inserted);
 }
 #endif
@@ -595,7 +596,7 @@ static void allocate_interfaces_and_endpoints(void)
             }
             if(req->ep == 0 && !req->optional) {
                 /* no matching ep found, disable the driver */
-                driver->enabled = false;
+                driver->error = true;
                 /* also revert all allocations for this driver */
                 for(reqnum = reqnum - 1; reqnum >= 0; reqnum -= 1) {
                     const uint8_t ep = driver->ep_allocs[reqnum].ep;
@@ -608,7 +609,7 @@ static void allocate_interfaces_and_endpoints(void)
             }
         }
 
-        if(!driver->enabled) {
+        if(driver->error) {
             continue;
         }
 
@@ -714,7 +715,7 @@ static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, v
             size = sizeof(struct usb_config_descriptor);
 
             for(i = 0; i < USB_NUM_DRIVERS; i++) {
-                if(drivers[i]->enabled && drivers[i]->config == index + 1 && drivers[i]->get_config_descriptor) {
+                if(drivers[i]->enabled && !drivers[i]->error && drivers[i]->config == index + 1 && drivers[i]->get_config_descriptor) {
                     size += drivers[i]->get_config_descriptor(&response_data[size], max_packet_size);
                 }
             }
@@ -895,8 +896,11 @@ static int usb_core_do_set_config(uint8_t new_config)
 
         init_deinit_endpoints(usb_config - 1, true);
         for(int i = 0; i < USB_NUM_DRIVERS; i++) {
-            if(is_active(drivers[i]) && drivers[i]->init_connection != NULL) {
-                drivers[i]->init_connection();
+            if(is_active(drivers[i])) {
+                if(drivers[i]->init_connection != NULL && drivers[i]->init_connection() < 0) {
+                    drivers[i]->error = true;
+                    continue;
+                }
                 require_lockdown |= drivers[i]->needs_exclusive_storage;
             }
         }

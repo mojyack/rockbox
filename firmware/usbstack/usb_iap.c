@@ -338,16 +338,14 @@ static int cdrv_get_config_descriptor(unsigned char* dest, int max_packet_size) 
     return dest - orig_dest;
 }
 
-static void cdrv_init_connection(void) {
+static int cdrv_init_connection(void) {
     stream.sample_rate     = 48000;
     last_charge_state      = -1;
     last_minute            = -1;
     last_hold_switch_state = -1;
 
-    /* TODO: disable iap on error */
-
     /* init audio sink */
-    check_act(iap_audio_init(), return);
+    check_act(iap_audio_init(), return -1);
 
     /* init libiap */
     iap_ctx.platform                   = &platform;
@@ -374,15 +372,10 @@ static void cdrv_init_connection(void) {
 
     iap_initialized = true;
     LOG("initialized");
-<<<<<<< HEAD
-    return;
-=======
-
     return 0;
->>>>>>> 894ca8b439 (fixup! usb: finally commit iap class driver)
-
 cleanup_audio:
     iap_audio_deinit();
+    return -1;
 }
 
 static int cdrv_set_interface(int intf, int alt) {
