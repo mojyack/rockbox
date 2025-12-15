@@ -468,8 +468,8 @@ static bool control_request_if_std(struct usb_ctrlrequest* req, void* reqdata, u
     unsigned char* const orig_dest = dest;
     switch(req->bRequest) {
     case USB_REQ_GET_DESCRIPTOR: {
-        const uint8_t desc_type = req->wValue >> 8;
-        /* const uint8_t desc_index = req->wValue & 0xff; */
+        const uint8_t desc_type  = req->wValue >> 8;
+        const uint8_t desc_index = req->wValue & 0xff;
         LOG("descriptor request type=%x index=%x", desc_type, desc_index);
         switch(desc_type) {
         case USB_DT_HID:
@@ -524,11 +524,7 @@ static bool control_request_if_endpoint(struct usb_ctrlrequest* req, void* reqda
 
     LOG("ctrl to endpoint %x (stream=%x, hid=%x)", req->wIndex, AS_EP_IN, HID_EP_IN);
     if(req->wIndex == AS_EP_IN) {
-<<<<<<< HEAD
-        /* const uint8_t recip_entity = req->wIndex >> 8; */
-=======
         const uint8_t recip_entity     = req->wIndex >> 8;
->>>>>>> 894ca8b439 (fixup! usb: finally commit iap class driver)
         const uint8_t control_selector = req->wValue >> 8;
         switch(req->bRequest) {
         case USB_AC_SET_CUR:

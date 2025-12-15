@@ -3,19 +3,19 @@
 #include <string.h>
 
 #include "logf.h"
+#include "system.h"
 
 #include "font.h"
 #include "lcd.h"
 
-#define MAX_COLS  64
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define MAX_COLS 64
 
 static int      rows;
 static int      columns;
 static unsigned count;
 
-static void update_color() {
-    int avail = rows - 1;
+static void update_color(void) {
+    unsigned avail = rows - 1;
     if((count % (avail * 2)) > avail) {
         lcd_set_drawinfo(DRMODE_SOLID, LCD_BLACK, LCD_WHITE);
     } else {
@@ -27,7 +27,7 @@ void iap_lcd_scatter(const char* fmt, ...) {
     if(rows == 0) {
         int w, h;
         font_getstringsize((unsigned char*)"A", &w, &h, FONT_SYSFIXED);
-        columns = min(LCD_WIDTH / w, MAX_COLS);
+        columns = MIN(LCD_WIDTH / w, MAX_COLS);
         rows    = LCD_HEIGHT / h;
     }
 
@@ -46,7 +46,7 @@ void iap_lcd_scatter(const char* fmt, ...) {
     lcd_putsf(0, 0, (unsigned char*)"count %u", count);
     for(int i = 0; i < len;) {
         char line[MAX_COLS];
-        int  copy = min(len - i, columns - 1);
+        int  copy = MIN(len - i, columns - 1);
         memcpy(line, buf + i, copy);
         memset(line + copy, ' ', columns - 1 - copy);
         line[columns - 1] = '\0';
