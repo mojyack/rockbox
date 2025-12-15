@@ -317,10 +317,7 @@ IAPBool iap_platform_close_artwork(void* platform, struct IAPPlatformArtwork* ar
     return iap_true;
 }
 
-extern IAPBool dhen;
-
 void iap_platform_dump_hex(const void* ptr, size_t size) {
-    if(!dhen) return;
     if(ptr == NULL) {
         logf("(null)");
         return;
