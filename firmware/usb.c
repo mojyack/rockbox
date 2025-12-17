@@ -102,7 +102,6 @@ static unsigned int usb_thread_entry = 0;
 static bool usb_monitor_enabled = false;
 #endif /* USB_FULL_INIT */
 static struct event_queue usb_queue SHAREDBSS_ATTR;
-static bool exclusive_storage_access = false;
 #ifdef USB_ENABLE_HID
 static bool usb_hid = true;
 #endif
@@ -112,14 +111,10 @@ static int usb_audio = 0;
 
 #ifdef USB_FULL_INIT
 static bool usb_host_present = false;
-static int usb_num_acks_to_expect = 0;
-static long usb_last_broadcast_tick = 0;
 #ifdef HAVE_USB_POWER
 static int usb_mode = USBMODE_DEFAULT;
 static int new_usbmode = USBMODE_DEFAULT;
 #endif
-
-static int usb_release_exclusive_storage(void);
 
 #if defined(USB_FIREWIRE_HANDLING)
 static void try_reboot(void)
@@ -232,9 +227,8 @@ static inline bool usb_configure_drivers(int for_state)
 #ifdef USB_ENABLE_CHARGING_ONLY
         usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, true);
 #endif
-        exclusive_storage_access = false;
 
-        usb_attach(); /* Powered only: attach now. */
+        usb_attach();
         break;
         /* USB_POWERED: */
 
@@ -251,52 +245,17 @@ static inline bool usb_configure_drivers(int for_state)
 #ifdef USB_ENABLE_CHARGING_ONLY
         usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, false);
 #endif
-        /* Check any drivers enabled at this point for exclusive storage
-         * access requirements. */
-        exclusive_storage_access = usb_core_any_exclusive_storage();
 
-        if(exclusive_storage_access)
-            return true;
-
-        usb_attach(); /* Not exclusive: attach now. */
+        usb_attach();
         break;
         /* USB_INSERTED: */
 
     case USB_EXTRACTED:
-        if(exclusive_storage_access)
-            usb_release_exclusive_storage();
         break;
         /* USB_EXTRACTED: */
     }
 
     return false;
-}
-
-static inline void usb_slave_mode(bool on)
-{
-    int rc;
-
-    if(on)
-    {
-        trigger_cpu_boost();
-#ifdef HAVE_PRIORITY_SCHEDULING
-        thread_set_priority(thread_self(), PRIORITY_REALTIME);
-#endif
-        disk_unmount_all();
-        usb_attach();
-    }
-    else /* usb_state == USB_INSERTED (only!) */
-    {
-#ifdef HAVE_PRIORITY_SCHEDULING
-        thread_set_priority(thread_self(), PRIORITY_SYSTEM);
-#endif
-        /* Entered exclusive mode */
-        rc = disk_mount_all();
-        if(rc <= 0) /* no partition */
-            panicf("mount: %d",rc);
-
-        cancel_cpu_boost();
-    }
 }
 
 void usb_signal_transfer_completion(
@@ -311,6 +270,10 @@ void usb_signal_notify(long id, intptr_t data)
 }
 
 #else  /* !HAVE_USBSTACK */
+
+static int usb_num_acks_to_expect = 0;
+static long usb_last_broadcast_tick = 0;
+static bool exclusive_storage_access = false;
 
 static inline void usb_stack_enable(bool enable)
 {
@@ -350,10 +313,32 @@ static inline bool usb_configure_drivers(int for_state)
         break;
     case USB_INSERTED:
         exclusive_storage_access = true;
-        return true;
+
+        /* Tell all threads that they have to back off the storage.
+           We subtract one for our own thread. Expect an ACK for every
+           listener for each broadcast they received. If it has been too
+           long, the user might have entered a screen that didn't ACK
+           when inserting the cable, such as a debugging screen. In that
+           case, reset the count or else USB would be locked out until
+           rebooting because it most likely won't ever come. Simply
+           resetting to the most recent broadcast count is racy. */
+        if(TIME_AFTER(current_tick, usb_last_broadcast_tick + HZ*5))
+        {
+            usb_num_acks_to_expect = 0;
+            usb_last_broadcast_tick = current_tick;
+        }
+
+        usb_num_acks_to_expect += queue_broadcast(SYS_USB_CONNECTED, 0) - 1;
+        DEBUGF("usb: waiting for %d acks...\n", usb_num_acks_to_expect);
+        break;
+
     case USB_EXTRACTED:
-        if(exclusive_storage_access)
-            usb_release_exclusive_storage();
+        if(exclusive_storage_access) {
+            exclusive_storage_access = false;
+            /* Tell all threads that we are back in business */
+            int bccount = queue_broadcast(SYS_USB_DISCONNECTED, 0) - 1;
+            DEBUGF("USB extracted. Broadcast to %d threads...\n", bccount);
+        }
         break;
     }
 
@@ -395,6 +380,7 @@ static inline void usb_slave_mode(bool on)
             panicf("mount: %d",rc);
     }
 }
+
 #endif /* HAVE_USBSTACK */
 
 static void usb_set_host_present(bool present)
@@ -422,41 +408,6 @@ static void usb_set_host_present(bool present)
     if(!usb_configure_drivers(USB_INSERTED))
         return; /* Exclusive storage access not required */
 
-    /* Tell all threads that they have to back off the storage.
-       We subtract one for our own thread. Expect an ACK for every
-       listener for each broadcast they received. If it has been too
-       long, the user might have entered a screen that didn't ACK
-       when inserting the cable, such as a debugging screen. In that
-       case, reset the count or else USB would be locked out until
-       rebooting because it most likely won't ever come. Simply
-       resetting to the most recent broadcast count is racy. */
-    if(TIME_AFTER(current_tick, usb_last_broadcast_tick + HZ*5))
-    {
-        usb_num_acks_to_expect = 0;
-        usb_last_broadcast_tick = current_tick;
-    }
-
-    usb_num_acks_to_expect += queue_broadcast(SYS_USB_CONNECTED, 0) - 1;
-    DEBUGF("usb: waiting for %d acks...\n", usb_num_acks_to_expect);
-}
-
-static bool usb_handle_connected_ack(void)
-{
-    if(usb_num_acks_to_expect > 0 && --usb_num_acks_to_expect == 0)
-    {
-        DEBUGF("usb: all threads have acknowledged the connect.\n");
-        if(usb_host_present)
-        {
-            usb_slave_mode(true);
-            return true;
-        }
-    }
-    else
-    {
-        DEBUGF("usb: got ack, %d to go...\n", usb_num_acks_to_expect);
-    }
-
-    return false;
 }
 
 /*--- General driver code ---*/
@@ -537,11 +488,20 @@ static void NORETURN_ATTR usb_thread(void)
             break;
             /* USB_INSERTED */
 
-        case SYS_USB_CONNECTED_ACK:
-            if(usb_handle_connected_ack())
-                usb_state = USB_INSERTED;
-            break;
+#ifndef HAVE_USBSTACK
+        case SYS_USB_CONNECTED_ACK: {
+            if(usb_num_acks_to_expect > 0 && --usb_num_acks_to_expect == 0) {
+                DEBUGF("usb: all threads have acknowledged the connect.\n");
+                if(usb_host_present) {
+                    usb_slave_mode(true);
+                    usb_state = USB_INSERTED;
+                }
+            } else {
+                DEBUGF("usb: got ack, %d to go...\n", usb_num_acks_to_expect);
+            }
+            } break;
             /* SYS_USB_CONNECTED_ACK */
+#endif
 
         case USB_EXTRACTED:
             if(usb_state == USB_EXTRACTED)
@@ -554,14 +514,16 @@ static void NORETURN_ATTR usb_thread(void)
             iap_reset_state(IF_IAP_MP(0));
 #endif
 
+#ifndef HAVE_USBSTACK
             /* Only disable the USB slave mode if we really have enabled
                it. Some expected acks may not have been received. */
             if(usb_state == USB_INSERTED)
                 usb_slave_mode(false);
+#endif
 
             usb_state = USB_EXTRACTED;
 #ifdef HAVE_USB_POWER
-	    new_usbmode = usb_mode;
+            new_usbmode = usb_mode;
 #endif
 #ifndef BOOTLOADER
             send_event(SYS_EVENT_USB_EXTRACTED, NULL);
@@ -756,9 +718,15 @@ void usb_start_monitoring(void)
 #endif /* USB_STATUS_BY_EVENT */
 #endif /* USB_FULL_INIT */
 
-void usb_acknowledge(long id)
+void usb_acknowledge(long id, intptr_t revision)
 {
-    queue_post(&usb_queue, id, 0);
+    if(id == SYS_USB_CONNECTED_ACK) {
+#ifdef HAVE_USBSTACK
+        usb_core_ack_connection(revision);
+#else
+        queue_post(&usb_queue, id, revision);
+#endif
+    }
 }
 
 void usb_init(void)
@@ -844,24 +812,6 @@ bool usb_inserted(void)
     return usb_state == USB_INSERTED || usb_state == USB_POWERED;
 }
 
-#ifdef HAVE_USBSTACK
-bool usb_exclusive_storage(void)
-{
-    /* Storage isn't actually exclusive until slave mode has been entered */
-    return exclusive_storage_access && usb_state == USB_INSERTED;
-}
-#endif /* HAVE_USBSTACK */
-
-int usb_release_exclusive_storage(void)
-{
-    int bccount;
-    exclusive_storage_access = false;
-    /* Tell all threads that we are back in business */
-    bccount = queue_broadcast(SYS_USB_DISCONNECTED, 0) - 1;
-    DEBUGF("USB extracted. Broadcast to %d threads...\n", bccount);
-    return bccount;
-}
-
 #ifdef USB_ENABLE_HID
 void usb_set_hid(bool enable)
 {
@@ -892,9 +842,10 @@ bool usb_inserted(void)
     return false;
 }
 
-void usb_acknowledge(long id)
+void usb_acknowledge(long id, intptr_t revision)
 {
     (void)id;
+    (void)revision;
 }
 
 void usb_init(void)

@@ -51,12 +51,12 @@ struct usb_class_driver;
 
 void usb_core_init(void);
 void usb_core_exit(void);
+void usb_core_ack_connection(intptr_t data);
 void usb_core_control_request(struct usb_ctrlrequest* req, void* data);
 void usb_core_control_complete(int status);
 void usb_core_legacy_control_request(struct usb_ctrlrequest* req);
 void usb_core_transfer_complete(int endpoint,int dir,int status,int length);
 void usb_core_bus_reset(void);
-bool usb_core_any_exclusive_storage(void);
 void usb_core_enable_driver(int driver,bool enabled);
 bool usb_core_driver_enabled(int driver);
 void usb_core_handle_transfer_completion(
