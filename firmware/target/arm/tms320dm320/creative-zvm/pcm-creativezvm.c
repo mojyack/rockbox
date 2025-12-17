@@ -28,8 +28,9 @@
 #include "audiohw.h"
 #include "dsp-target.h"
 #include "pcm-internal.h"
+#include "pcm_sink.h"
 
-void pcm_play_dma_init(void)
+static void sink_dma_init(void)
 {
     IO_CLK_O1DIV = 3;
     /* Set GIO25 to CLKOUT1A */
@@ -44,7 +45,7 @@ void pcm_play_dma_init(void)
 //    dsp_init();
 }
 
-void pcm_play_dma_postinit(void)
+static void sink_dma_postinit(void)
 {
     audiohw_postinit();
 
@@ -52,29 +53,42 @@ void pcm_play_dma_postinit(void)
 //    dsp_wake();
 }
 
-void pcm_dma_apply_settings(void)
+static void sink_set_freq(uint16_t freq)
 {
-    audiohw_set_frequency(pcm_fsel);
+    audiohw_set_frequency(freq);
 }
 
-void pcm_play_dma_start(const void *addr, size_t size)
+static void sink_dma_start(const void *addr, size_t size)
 {
     (void)addr;
     (void)size;
-    DEBUGF("pcm_play_dma_start(0x%x, %d)", addr, size);
+    DEBUGF("sink_dma_start(0x%x, %d)", addr, size);
 }
 
-void pcm_play_dma_stop(void)
+static void sink_dma_stop(void)
 {
 
 }
 
-void pcm_play_lock(void)
+static void sink_lock(void)
 {
 
 }
 
-void pcm_play_unlock(void)
+static void sink_unlock(void)
 {
 
 }
+
+struct pcm_sink hardware_pcm_sink = {
+    .samprs       = hw_freq_sampr,
+    .num_samprs   = HW_NUM_FREQ,
+    .default_freq = HW_FREQ_DEFAULT,
+    .init         = sink_dma_init,
+    .postinit     = sink_dma_postinit,
+    .set_freq     = sink_set_freq,
+    .lock         = sink_lock,
+    .unlock       = sink_unlock,
+    .play         = sink_dma_start,
+    .stop         = sink_dma_stop,
+};

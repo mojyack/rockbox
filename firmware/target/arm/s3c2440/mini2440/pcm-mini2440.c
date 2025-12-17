@@ -27,6 +27,9 @@
 #include "sound.h"
 #include "file.h"
 #include "pcm-internal.h"
+#include "pcm_sink.h"
+
+#include "export/s3c2440.h"
 
 /* PCM interrupt routine lockout */
 static struct
@@ -38,6 +41,7 @@ static struct
     .locked = 0,
     .state  = 0,
 };
+static uint16_t freq = HW_FREQ_DEFAULT;
 
 #define FIFO_COUNT ((IISFCON >> 6) & 0x3F)
 
@@ -60,20 +64,20 @@ static const unsigned char pcm_freq_parms[HW_NUM_FREQ][2] =
 void fiq_handler(void) __attribute__((interrupt ("FIQ")));
 
 /* Mask the DMA interrupt */
-void pcm_play_lock(void)
+static void sink_lock(void)
 {
     if (++dma_play_lock.locked == 1)
         bitset32(&INTMSK, DMA2_MASK);
 }
 
 /* Unmask the DMA interrupt if enabled */
-void pcm_play_unlock(void)
+static void sink_unlock(void)
 {
     if (--dma_play_lock.locked == 0)
         bitclr32(&INTMSK, dma_play_lock.state);
 }
 
-void pcm_play_dma_init(void)
+static void sink_dma_init(void)
 {
     /* There seem to be problems when changing the IIS interface configuration
      * when a clock is not present.
@@ -120,23 +124,18 @@ void pcm_play_dma_init(void)
     bitset32(&INTMOD, DMA2_MASK);
 }
 
-void pcm_play_dma_postinit(void)
+static void sink_set_freq(uint16_t freq_)
 {
-    audiohw_postinit();
-}
-
-void pcm_dma_apply_settings(void)
-{
+    freq = freq_;
 #ifdef HAVE_UDA1341
     unsigned int reg_val;
     /* set prescaler and master clock rate according to freq */
-    reg_val = (pcm_freq_parms [pcm_fsel][0] << 5) | pcm_freq_parms [pcm_fsel][0];
+    reg_val = (pcm_freq_parms [freq][0] << 5) | pcm_freq_parms [freq][0];
 
-    IISMOD = (IISMOD & ~IISMOD_MASTER_CLOCK_384FS) | pcm_freq_parms [pcm_fsel][1] ;
+    IISMOD = (IISMOD & ~IISMOD_MASTER_CLOCK_384FS) | pcm_freq_parms [freq][1] ;
     IISPSR = reg_val;
 #endif
-
-    audiohw_set_frequency(pcm_fsel);
+    audiohw_set_frequency(freq);
 }
 
 /* Connect the DMA and start filling the FIFO */
@@ -161,8 +160,8 @@ static void play_start_pcm(void)
     IISCON &= ~(1<<3);
 
 #ifdef HAVE_UDA1341
-    IISMOD = (IISMOD & ~IISMOD_MASTER_CLOCK_384FS) | pcm_freq_parms [pcm_fsel][1] ;
-    IISPSR = (pcm_freq_parms [pcm_fsel][0] << 5) | pcm_freq_parms [pcm_fsel][0];
+    IISMOD = (IISMOD & ~IISMOD_MASTER_CLOCK_384FS) | pcm_freq_parms [freq][1] ;
+    IISPSR = (pcm_freq_parms [freq][0] << 5) | pcm_freq_parms [freq][0];
 #endif
 
     /* start the IIS */
@@ -198,7 +197,7 @@ static void play_stop_pcm(void)
     IISCON &= ~(1<<0);
 }
 
-void pcm_play_dma_start(const void *addr, size_t size)
+static void sink_dma_start(const void *addr, size_t size)
 {
     /* Enable the IIS clock */
     bitset32(&CLKCON, 1<<17);
@@ -227,7 +226,7 @@ void pcm_play_dma_start(const void *addr, size_t size)
 }
 
 /* Promptly stop DMA transfers and stop IIS */
-void pcm_play_dma_stop(void)
+static void sink_dma_stop(void)
 {
     play_stop_pcm();
 
@@ -259,3 +258,16 @@ void fiq_handler(void)
 
     pcm_play_dma_status_callback(PCM_DMAST_STARTED);
 }
+
+struct pcm_sink hardware_pcm_sink = {
+    .samprs       = hw_freq_sampr,
+    .num_samprs   = HW_NUM_FREQ,
+    .default_freq = HW_FREQ_DEFAULT,
+    .init         = sink_dma_init,
+    .postinit     = audiohw_postinit,
+    .set_freq     = sink_set_freq,
+    .lock         = sink_lock,
+    .unlock       = sink_unlock,
+    .play         = sink_dma_start,
+    .stop         = sink_dma_stop,
+};
