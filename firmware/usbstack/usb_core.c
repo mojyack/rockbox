@@ -1208,7 +1208,7 @@ void usb_core_control_complete(int status)
 void usb_core_legacy_control_request(struct usb_ctrlrequest* req)
 {
     /* Only submit non-overlapping requests */
-    if (num_active_requests++ == 0)
+    if (!bus_reset_pending && num_active_requests++ == 0)
     {
         buffered_request = *req;
         active_request = &buffered_request;
@@ -1223,17 +1223,11 @@ void usb_drv_control_response(enum usb_control_response resp,
                               void* data, int length)
 {
     struct usb_ctrlrequest* req = active_request;
-    unsigned int num_active = num_active_requests--;
 
-    /*
-     * There should have been a prior request submission, at least.
-     * FIXME: It seems the iPod video can get here and ignoring it
-     * allows the connection to succeed??
-     */
-    if (num_active == 0)
+    /* There should have been a prior request submission, at least. */
+    if (num_active_requests <= 0)
     {
-        //panicf("null ctrl req");
-        return;
+        panicf("null ctrl req");
     }
 
     /*
@@ -1250,7 +1244,7 @@ void usb_drv_control_response(enum usb_control_response resp,
      * Play it safe and return a STALL. At this point we've recovered from
      * the error on our end and will be ready to handle the next request.
      */
-    if (num_active > 1)
+    if (num_active_requests >= 2)
     {
         active_request = NULL;
         num_active_requests = 0;
@@ -1261,6 +1255,7 @@ void usb_drv_control_response(enum usb_control_response resp,
     if(req->wLength == 0)
     {
         active_request = NULL;
+        num_active_requests--;
 
         /* No-data request */
         if(resp == USB_CONTROL_ACK)
@@ -1272,16 +1267,17 @@ void usb_drv_control_response(enum usb_control_response resp,
     }
     else if(req->bRequestType & USB_DIR_IN)
     {
+        active_request = NULL;
+        num_active_requests--;
+
         /* Control read request */
         if(resp == USB_CONTROL_ACK)
         {
-            active_request = NULL;
             usb_drv_recv_nonblocking(EP_CONTROL, NULL, 0);
             usb_drv_send(EP_CONTROL, data, length);
         }
         else if(resp == USB_CONTROL_STALL)
         {
-            active_request = NULL;
             usb_drv_stall(EP_CONTROL, true, true);
         }
         else
@@ -1303,6 +1299,7 @@ void usb_drv_control_response(enum usb_control_response resp,
             /* We should stall the OUT endpoint here, but the old code did
              * not do so and some drivers may not handle it correctly. */
             active_request = NULL;
+            num_active_requests--;
             usb_drv_stall(EP_CONTROL, true, true);
         }
         else
@@ -1313,6 +1310,7 @@ void usb_drv_control_response(enum usb_control_response resp,
     else
     {
         active_request = NULL;
+        num_active_requests--;
         control_write_data = NULL;
         control_write_data_done = false;
 
