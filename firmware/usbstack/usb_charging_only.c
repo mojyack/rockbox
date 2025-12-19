@@ -65,6 +65,7 @@ static int cdrv_get_config_descriptor(unsigned char *dest,int max_packet_size)
 
 struct usb_class_driver usb_cdrv_charging_only = {
     .needs_exclusive_storage = false,
+    .needs_cpu_boost = false,
     .config = 1,
     .set_first_interface = cdrv_set_first_interface,
     .get_config_descriptor = cdrv_get_config_descriptor,
