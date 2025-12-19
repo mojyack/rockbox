@@ -369,6 +369,43 @@ void pcm_apply_settings(void)
     mutex_unlock(&sink_mutex);
 }
 
+bool pcm_switch_sink(size_t sink) {
+    logf("pcm_switch_sink %d to %d", cur_sink, sink);
+    if(sink >= ARRAYLEN(sinks)) {
+        return false;
+    }
+
+    mutex_lock(&sink_mutex);
+
+    if(cur_sink == sink) {
+        mutex_unlock(&sink_mutex);
+        return true;
+    }
+    /* save current sink before switching */
+    struct pcm_sink* old_sink = sinks[cur_sink];
+    /* update sink index */
+    cur_sink = sink;
+    /* synchronize frequency */
+    unsigned long cur_freq = old_sink->samprs[old_sink->pending_freq];
+    pcm_set_frequency(cur_freq);
+    pcm_apply_settings();
+    /* when playing, continue playing on new sink */
+    if(pcm_playing) {
+        old_sink->stop();
+        /* need more */
+        const void *start;
+        size_t size;
+        if(pcm_get_more_int(&start, &size)) {
+            pcm_play_dma_start_int(start, size);
+        } else {
+            pcm_play_stop_int();
+        }
+    }
+
+    mutex_unlock(&sink_mutex);
+    return true;
+}
+
 #ifdef HAVE_RECORDING
 /** Low level pcm recording apis **/
 
