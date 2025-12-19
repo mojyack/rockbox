@@ -1398,6 +1398,10 @@ Lyre prototype 1 */
 #define USB_ENABLE_AUDIO
 #endif
 
+#if defined(USB_HAS_INTERRUPT) && defined(USB_HAS_ISOCHRONOUS) && USB_BATCH_SLOTS > 0
+#define USB_ENABLE_IAP
+#endif
+
 #endif /* BOOTLOADER */
 
 #endif /* HAVE_USBSTACK */
