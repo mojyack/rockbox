@@ -108,10 +108,6 @@ static inline void pcm_play_dma_start_int(const void *addr, size_t size)
     sinks[cur_sink]->play(addr, size);
 }
 
-struct pcm_sink* pcm_get_current_sink(void) {
-    return sinks[cur_sink];
-}
-
 bool pcm_play_dma_complete_callback(enum pcm_dma_status status,
                                     const void **addr, size_t *size)
 {
@@ -215,6 +211,10 @@ void pcm_do_peak_calculation(struct pcm_peaks *peaks, bool active,
         /* peaks are zero */
         peaks->left = peaks->right = 0;
     }
+}
+
+struct pcm_sink* pcm_get_current_sink(void) {
+    return sinks[cur_sink];
 }
 
 bool pcm_is_playing(void)
@@ -367,6 +367,43 @@ void pcm_apply_settings(void)
         sink->configured_freq = sink->pending_freq;
     }
     mutex_unlock(&sink_mutex);
+}
+
+bool pcm_switch_sink(size_t sink) {
+    logf("pcm_switch_sink %d to %d", cur_sink, sink);
+    if(sink >= ARRAYLEN(sinks)) {
+        return false;
+    }
+
+    mutex_lock(&sink_mutex);
+
+    if(cur_sink == sink) {
+        mutex_unlock(&sink_mutex);
+        return true;
+    }
+    /* save current sink before switching */
+    struct pcm_sink* old_sink = sinks[cur_sink];
+    /* update sink index */
+    cur_sink = sink;
+    /* synchronize frequency */
+    unsigned long cur_freq = old_sink->samprs[old_sink->pending_freq];
+    pcm_set_frequency(cur_freq);
+    pcm_apply_settings();
+    /* when playing, continue playing on new sink */
+    if(pcm_playing) {
+        old_sink->stop();
+        /* need more */
+        const void *start;
+        size_t size;
+        if(pcm_get_more_int(&start, &size)) {
+            pcm_play_dma_start_int(start, size);
+        } else {
+            pcm_play_stop_int();
+        }
+    }
+
+    mutex_unlock(&sink_mutex);
+    return true;
 }
 
 #ifdef HAVE_RECORDING

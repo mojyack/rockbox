@@ -60,6 +60,8 @@ void pcm_set_frequency(unsigned int samplerate);
 unsigned int pcm_get_frequency(void);
 /* apply settings to hardware immediately */
 void pcm_apply_settings(void);
+/* switch playback sink */
+bool pcm_switch_sink(size_t sink /* PCM_SINK_* */);
 
 /** RAW PCM playback routines **/
 
