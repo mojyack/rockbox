@@ -436,7 +436,7 @@ static int cdrv_get_config_descriptor(unsigned char *dest,int max_packet_size)
 #else
 static int usb_handle = 0;
 #endif
-static void cdrv_init_connection(void)
+static int cdrv_init_connection(void)
 {
     logf("ums: set config");
     /* prime rx endpoint. We only need room for commands */
@@ -483,6 +483,7 @@ static void cdrv_init_connection(void)
         ejected[i] = !check_disk_present(IF_MD(i));
         queue_broadcast(SYS_USB_LUN_LOCKED, (i<<16)+0);
     }
+    return 0;
 }
 
 void cdrv_disconnect(void)

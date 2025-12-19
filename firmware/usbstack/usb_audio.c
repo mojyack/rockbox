@@ -1206,14 +1206,13 @@ static bool cdrv_control_request(struct usb_ctrlrequest* req, void *reqdata, uns
  * connection is ready to be used. Currently just sets
  * the audio sample rate to default.
  */
-static void cdrv_init_connection(void)
+static int cdrv_init_connection(void)
 {
     logf("usbaudio: init connection");
 
     // make sure we can get the buffers first...
-    // TODO: disable this driver when failed
     if (usb_audio_request_buf())
-        return;
+        return -1;
 
     usbaudio_active = true;
     dsp = dsp_get_config(CODEC_IDX_AUDIO);
@@ -1229,6 +1228,7 @@ static void cdrv_init_connection(void)
     set_playback_sampling_frequency(HW_SAMPR_DEFAULT);
     tmp_saved_vol = sound_current(SOUND_VOLUME);
     usb_audio_playing = false;
+    return 0;
 }
 
 /*
