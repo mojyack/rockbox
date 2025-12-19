@@ -21,6 +21,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "config.h"
+
 struct pcm_sink {
     /* characteristics */
     const unsigned long* samprs;
@@ -43,6 +45,9 @@ struct pcm_sink {
 
 enum pcm_sink_ids {
     PCM_SINK_HARDWARE = 0,
+#ifdef USB_ENABLE_IAP
+    PCM_SINK_IAP,
+#endif
 };
 
 /* defined in each platform pcm source */

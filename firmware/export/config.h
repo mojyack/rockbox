@@ -1402,6 +1402,10 @@ Lyre prototype 1 */
 #define USB_ENABLE_IAP
 #endif
 
+#if defined(USB_ENABLE_IAP)
+#define HAVE_MULTIMEDIA_KEYS
+#endif
+
 #endif /* BOOTLOADER */
 
 #endif /* HAVE_USBSTACK */

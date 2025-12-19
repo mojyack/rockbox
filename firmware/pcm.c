@@ -79,8 +79,15 @@
 /* 'true' when all stages of pcm initialization have completed */
 static bool pcm_is_ready = false;
 
-static struct pcm_sink* sinks[1] = {
+#ifdef USB_ENABLE_IAP
+extern struct pcm_sink iap_pcm_sink;
+#endif
+
+static struct pcm_sink* sinks[] = {
     [PCM_SINK_HARDWARE] = &hardware_pcm_sink,
+#ifdef USB_ENABLE_IAP
+    [PCM_SINK_IAP] = &iap_pcm_sink,
+#endif
 };
 static uint8_t cur_sink = 0;
 static struct mutex sink_mutex; /* protects sinks and cur_sink */
