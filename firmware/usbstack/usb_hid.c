@@ -543,11 +543,12 @@ static int cdrv_get_config_descriptor(unsigned char *dest, int max_packet_size)
     return (int)(dest - orig_dest);
 }
 
-static void cdrv_init_connection(void)
+static int cdrv_init_connection(void)
 {
     logf("hid: init connection");
     active = true;
     currently_sending = false;
+    return 0;
 }
 
 /* called by usb_core_init() */
