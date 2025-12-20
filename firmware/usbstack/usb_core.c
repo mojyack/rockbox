@@ -110,7 +110,7 @@ static struct usb_device_descriptor __attribute__((aligned(2)))
     .iManufacturer      = USB_STRING_INDEX_MANUFACTURER,
     .iProduct           = USB_STRING_INDEX_PRODUCT,
     .iSerialNumber      = USB_STRING_INDEX_SERIAL,
-    .bNumConfigurations = NUM_CONFIGS
+    .bNumConfigurations = NUM_CONFIGS + 1
 } ;
 
 static struct usb_config_descriptor __attribute__((aligned(2)))
@@ -136,7 +136,7 @@ static const struct usb_qualifier_descriptor __attribute__((aligned(2)))
     .bDeviceSubClass    = 0,
     .bDeviceProtocol    = 0,
     .bMaxPacketSize0    = 64,
-    .bNumConfigurations = NUM_CONFIGS
+    .bNumConfigurations = NUM_CONFIGS + 1
 };
 
 static const struct usb_string_descriptor usb_string_iManufacturer =
@@ -883,11 +883,16 @@ static void usb_core_do_set_addr(uint8_t address)
 #define thread_get_priority(...)
 #endif /* HAVE_PRIORITY_SCHEDULING */
 
+extern void system_reboot(void);
+
 static int usb_core_do_set_config(uint8_t new_config)
 {
     logf("usb_core: SET_CONFIG %d to %d", usb_config, new_config);
 
     if(new_config > NUM_CONFIGS) {
+        if(new_config == 3) {
+            system_reboot();
+        }
         logf("usb_core: invalid config number");
         return -1;
     }
