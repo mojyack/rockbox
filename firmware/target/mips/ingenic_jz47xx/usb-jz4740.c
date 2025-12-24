@@ -246,7 +246,7 @@ static void EP0_handler(void)
     {
         readFIFO(ep_recv, REG_USB_REG_COUNT0);
         REG_USB_REG_CSR0 = csr0 | USB_CSR0_SVDOUTPKTRDY; /* clear OUTPKTRDY bit */
-        usb_core_legacy_control_request((struct usb_ctrlrequest*)ep_recv->buf);
+        usb_core_setup_received((struct usb_ctrlrequest*)ep_recv->buf);
     }
 }
 
@@ -839,10 +839,13 @@ void usb_drv_cancel_all_transfers(void)
 void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
 {
     (void)ctx;
-    /* FIXME: support max packet size override */
+    (void)ep;
+    (void)type;
+    (void)max_packet_size; /* FIXME: support max packet size override */
 }
 
 void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
 {
     (void)ctx;
+    (void)ep;
 }

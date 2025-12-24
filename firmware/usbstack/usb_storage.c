@@ -695,12 +695,9 @@ static void usb_storage_send_smart(uint8_t cmd)
 #endif /* STORAGE_ATA */
 
 /* called by usb_core_control_request() */
-static bool cdrv_control_request(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest)
+static bool cdrv_control_request(struct usb_ctrlrequest* req)
 {
     bool handled = false;
-
-    (void)dest;
-    (void)reqdata;
 
     switch (req->bRequest) {
         case USB_BULK_GET_MAX_LUN: {
@@ -709,7 +706,7 @@ static bool cdrv_control_request(struct usb_ctrlrequest* req, void* reqdata, uns
             if(skip_first) (*tb.max_lun) --;
 #endif
             logf("ums: getmaxlun");
-            usb_drv_control_response(USB_CONTROL_ACK, tb.max_lun, 1);
+            usb_core_control_response(1, tb.max_lun, 1);
             handled = true;
             break;
         }
@@ -724,7 +721,7 @@ static bool cdrv_control_request(struct usb_ctrlrequest* req, void* reqdata, uns
             usb_drv_reset_endpoint(EP_IN, false);
             usb_drv_reset_endpoint(EP_OUT, true);
 #endif
-            usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
+            usb_core_control_response(1, NULL, 0);
             handled = true;
             break;
     }

@@ -442,39 +442,19 @@ static bool cdrv_fast_transfer_complete(int ep, int dir, int status, int length)
     return (ep | dir) == AS_EP_IN;
 }
 
-static unsigned char ctrl_buf[256] USB_DEVBSS_ATTR;
-
 static void respond_zero(struct usb_ctrlrequest* req) {
-    if(req->wLength > sizeof(ctrl_buf)) {
-        ERROR("required data too long %u > %u", req->wLength, sizeof(ctrl_buf));
-        usb_drv_control_response(USB_CONTROL_STALL, NULL, 0);
+    if(req->wLength > sizeof(usb_control_data)) {
+        ERROR("required data too long %u > %u", req->wLength, sizeof(usb_control_data));
+        usb_core_control_response(false, NULL, 0);
     } else {
-        memset(ctrl_buf, 0, req->wLength);
-        usb_drv_control_response(USB_CONTROL_ACK, ctrl_buf, req->wLength);
+        memset(usb_control_data, 0, req->wLength);
+        usb_core_control_response(true, usb_control_data, req->wLength);
     }
 }
 
-/* returns true when ctrl_buf has received data */
-static bool receive_data(struct usb_ctrlrequest* req, void* reqdata) {
-    if(reqdata == NULL) {
-        /* setup */
-        if(req->wLength > sizeof(ctrl_buf)) {
-            ERROR("parameter too long");
-            usb_drv_control_response(USB_CONTROL_STALL, NULL, 0);
-        } else {
-            usb_drv_control_response(USB_CONTROL_RECEIVE, ctrl_buf, req->wLength);
-        }
-        return false;
-    } else {
-        /* data */
-        return true;
-    }
-}
-
-static bool control_request_if_std(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest) {
-    (void)reqdata;
-
-    unsigned char* const orig_dest = dest;
+static bool control_request_if_std(struct usb_ctrlrequest* req) {
+    const void* src = NULL;
+    size_t      size;
     switch(req->bRequest) {
     case USB_REQ_GET_DESCRIPTOR: {
         const uint8_t desc_type  = req->wValue >> 8;
@@ -482,18 +462,28 @@ static bool control_request_if_std(struct usb_ctrlrequest* req, void* reqdata, u
         LOG("descriptor request type=%x index=%x", desc_type, desc_index);
         switch(desc_type) {
         case USB_DT_HID:
-            PACK_DATA(&dest, ipod_hid_hid_desc);
+            src  = &ipod_hid_hid_desc;
+            size = sizeof(ipod_hid_hid_desc);
             break;
         case USB_DT_REPORT:
             if(usb_drv_port_speed()) {
-                PACK_DATA(&dest, ipod_hid_report_hs);
+                src  = &ipod_hid_report_hs;
+                size = sizeof(ipod_hid_report_hs);
             } else {
-                PACK_DATA(&dest, ipod_hid_report_fs);
+                src  = &ipod_hid_report_fs;
+                size = sizeof(ipod_hid_report_fs);
             }
             break;
         }
-        if(dest != orig_dest) {
-            usb_drv_control_response(USB_CONTROL_ACK, orig_dest, MIN(dest - orig_dest, req->wLength));
+        if(src != NULL) {
+            if(size > sizeof(usb_control_data)) {
+                LOG("descriptor size too large");
+                usb_core_control_response(false, NULL, 0);
+            } else {
+                size = MIN(size, req->wLength);
+                memcpy(usb_control_data, src, size);
+                usb_core_control_response(true, usb_control_data, size);
+            }
             return true;
         }
     } break;
@@ -501,9 +491,7 @@ static bool control_request_if_std(struct usb_ctrlrequest* req, void* reqdata, u
     return false;
 }
 
-static bool control_request_if_class(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest) {
-    (void)dest;
-
+static bool control_request_if_class(struct usb_ctrlrequest* req) {
     const uint8_t recip_interface = req->wIndex & 0xff;
     if(recip_interface == hid.interface) {
         switch(req->bRequest) {
@@ -511,53 +499,46 @@ static bool control_request_if_class(struct usb_ctrlrequest* req, void* reqdata,
             respond_zero(req);
             return true;
         case USB_HID_SET_REPORT:
-            if(receive_data(req, reqdata)) {
 #if DEBUG_DUMP_RX == 1
-                logf("==== acc: %u bytes ====", req->wLength);
-                iap_platform_dump_hex(reqdata, req->wLength);
+            logf("==== acc: %u bytes ====", req->wLength);
+            iap_platform_dump_hex(usb_control_data, req->wLength);
 #endif
-                check_act(iap_feed_hid_report(&iap_ctx, reqdata, req->wLength), return false);
-                usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
-            }
+            check_act(iap_feed_hid_report(&iap_ctx, usb_control_data, req->wLength), return false);
+            usb_core_control_response(true, NULL, 0);
             return true;
         case USB_HID_SET_IDLE:
-            usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
+            usb_core_control_response(true, NULL, 0);
             return true;
         }
     }
     return false;
 }
 
-static bool control_request_if_endpoint(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest) {
-    (void)dest;
-
+static bool control_request_if_endpoint(struct usb_ctrlrequest* req) {
     LOG("ctrl to endpoint %x (stream=%x, hid=%x)", req->wIndex, AS_EP_IN, HID_EP_IN);
     if(req->wIndex == AS_EP_IN) {
         const uint8_t recip_entity     = req->wIndex >> 8;
         const uint8_t control_selector = req->wValue >> 8;
         switch(req->bRequest) {
         case USB_AC_SET_CUR:
-            if(!receive_data(req, reqdata)) {
-                return true;
-            }
             LOG("audio ctrl to stream endpoint entity=0x%02X request=0x%02X length=%u", recip_entity, req->bRequest, req->wLength);
             switch(control_selector) {
             case USB_AS_EP_CS_SAMPLING_FREQ_CTL:
                 check_act(req->wLength == 3, goto stall);
-                stream.sample_rate = ctrl_buf[0] | (ctrl_buf[1] << 8) | (ctrl_buf[2] << 16);
+                stream.sample_rate = usb_control_data[0] | (usb_control_data[1] << 8) | (usb_control_data[2] << 16);
                 LOG("audio stream sampling rate %lu", stream.sample_rate);
                 break;
             }
-            usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
+            usb_core_control_response(true, NULL, 0);
             return true;
         case USB_AC_GET_CUR:
             switch(control_selector) {
             case USB_AS_EP_CS_SAMPLING_FREQ_CTL:
                 check_act(req->wLength == 3, goto stall);
-                ctrl_buf[2] = (stream.sample_rate >> 16) & 0xff;
-                ctrl_buf[1] = (stream.sample_rate >> 8) & 0xff;
-                ctrl_buf[0] = (stream.sample_rate & 0xff);
-                usb_drv_control_response(USB_CONTROL_ACK, ctrl_buf, req->wLength);
+                usb_control_data[2] = (stream.sample_rate >> 16) & 0xff;
+                usb_control_data[1] = (stream.sample_rate >> 8) & 0xff;
+                usb_control_data[0] = (stream.sample_rate & 0xff);
+                usb_core_control_response(true, usb_control_data, 3);
                 return true;
             }
             /* fallthrough */
@@ -567,14 +548,14 @@ static bool control_request_if_endpoint(struct usb_ctrlrequest* req, void* reqda
             respond_zero(req);
             return true;
         stall:
-            usb_drv_control_response(USB_CONTROL_STALL, NULL, 0);
+            usb_core_control_response(false, NULL, 0);
             return true;
         }
     }
     return false;
 }
 
-static bool cdrv_control_request(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest) {
+static bool cdrv_control_request(struct usb_ctrlrequest* req) {
     const uint8_t req_recipient = req->bRequestType & USB_RECIP_MASK;
     const uint8_t req_type      = req->bRequestType & USB_TYPE_MASK;
 #if 0
@@ -582,11 +563,11 @@ static bool cdrv_control_request(struct usb_ctrlrequest* req, void* reqdata, uns
     LOG("recip=%x type=%x", req_recipient, req_type);
 #endif
     if(req_recipient == USB_RECIP_INTERFACE && req_type == USB_TYPE_STANDARD) {
-        return control_request_if_std(req, reqdata, dest);
+        return control_request_if_std(req);
     } else if(req_recipient == USB_RECIP_INTERFACE && req_type == USB_TYPE_CLASS) {
-        return control_request_if_class(req, reqdata, dest);
+        return control_request_if_class(req);
     } else if(req_recipient == USB_RECIP_ENDPOINT && req_type == USB_TYPE_CLASS) {
-        return control_request_if_endpoint(req, reqdata, dest);
+        return control_request_if_endpoint(req);
     }
     return false;
 }

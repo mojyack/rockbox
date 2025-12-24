@@ -105,7 +105,7 @@ struct usb_class_driver {
        able to handle it, it should ack the request, and return true. Otherwise
        it should return false.
        Optional function */
-    bool (*control_request)(struct usb_ctrlrequest* req, void* reqdata, unsigned char *dest);
+    bool (*control_request)(struct usb_ctrlrequest* req);
 
 #ifdef HAVE_HOTSWAP
     /* Tells the driver that a hotswappable disk/card was inserted or
@@ -133,6 +133,8 @@ struct usb_class_driver {
        Optional function */
     void (*notify_event)(intptr_t data);
 };
+
+extern unsigned char usb_control_data[256];
 
 #define PACK_DATA(dest, data) pack_data(dest, &(data), sizeof(data))
 static inline void pack_data(uint8_t **dest, const void *data, size_t size)
