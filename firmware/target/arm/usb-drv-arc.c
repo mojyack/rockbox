@@ -494,8 +494,8 @@ void usb_drv_init(void)
      * will cause undefined behavior for the data pid tracking on the active
      * endpoint/direction. */
     for(int ep_num=1;ep_num<USB_NUM_ENDPOINTS;ep_num++) {
-        usb_drv_init_endpoint(ep_num | USB_DIR_IN, USB_ENDPOINT_XFER_BULK, -1);
-        usb_drv_init_endpoint(ep_num | USB_DIR_OUT, USB_ENDPOINT_XFER_BULK, -1);
+        usb_drv_ep_init(NULL, ep_num | USB_DIR_IN, USB_ENDPOINT_XFER_BULK, -1);
+        usb_drv_ep_init(NULL, ep_num | USB_DIR_OUT, USB_ENDPOINT_XFER_BULK, -1);
     }
 }
 
@@ -984,9 +984,10 @@ void usb_drv_cancel_all_transfers(void)
     }
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
-    int ep_num = EP_NUM(endpoint);
-    int ep_dir = EP_DIR(endpoint);
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size) {
+    (void)ctx;
+    int ep_num = EP_NUM(ep);
+    int ep_dir = EP_DIR(ep);
 
     logf("ep init: %d %s %s", ep_num, XFER_DIR_STR(ep_dir), XFER_TYPE_STR(type));
 
@@ -1017,13 +1018,12 @@ int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
         qh->max_pkt_length = max_packet_size << QH_MAX_PKT_LEN_POS | QH_ZLT_SEL;
 
     qh->dtd.next_td_ptr = QH_NEXT_TERMINATE;
-
-    return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint) {
-    int ep_num = EP_NUM(endpoint);
-    int ep_dir = EP_DIR(endpoint);
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep) {
+    (void)ctx;
+    int ep_num = EP_NUM(ep);
+    int ep_dir = EP_DIR(ep);
 
     logf("ep deinit: %d %s", ep_num, XFER_DIR_STR(ep_dir));
 
@@ -1032,8 +1032,6 @@ int usb_drv_deinit_endpoint(int endpoint) {
     } else {
         REG_ENDPTCTRL(ep_num) &= ~EPCTRL_RX_ENABLE & ~EPCTRL_RX_TYPE;
     }
-
-    return 0;
 }
 
 static void prepare_td(struct transfer_descriptor* td,
