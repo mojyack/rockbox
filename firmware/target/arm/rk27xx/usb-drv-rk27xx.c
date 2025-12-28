@@ -280,15 +280,17 @@ int usb_drv_port_speed(void)
     return (DEV_INFO & DEV_SPEED) ? 0 : 1;
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
+{
+    (void)ctx;
     (void)max_packet_size; /* FIXME: support max packet size override */
 
-    int num = EP_NUM(endpoint);
-    int dir = EP_DIR(endpoint);
+    int num = EP_NUM(ep);
+    int dir = EP_DIR(ep);
 
     struct endpoint_t *endp = &endpoints[num];
 
-    if(EP_DIR(endpoint) == DIR_IN)
+    if(dir == DIR_IN)
         TXCON(endp) = (num << 8) | TXEPEN | TXNAK | TXACKINTEN | TXCFINTE;
     else
         RXCON(endp) = (num << 8) | RXEPEN | RXNAK | RXACKINTEN | RXCFINTE | RXERRINTEN;
@@ -297,8 +299,11 @@ int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
     return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint) {
-    int num = EP_NUM(endpoint);
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
+{
+    (void)ctx;
+
+    int num = EP_NUM(ep);
     struct endpoint_t *endp = &endpoints[num];
 
     /* disable interrupt from this endpoint */

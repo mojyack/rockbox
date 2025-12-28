@@ -836,11 +836,13 @@ void usb_drv_cancel_all_transfers(void)
     restore_irq(flags);
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
+{
+    (void)ctx;
     /* FIXME: support max packet size override */
-    return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint) {
-    return 0;
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
+{
+    (void)ctx;
 }

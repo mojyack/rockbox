@@ -343,13 +343,15 @@ int usb_drv_port_speed(void)
     return (USB_DEV_STS & USB_DEV_STS_MASK_SPD) ? 0 : 1;
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
+{
+    (void)ctx;
     (void)max_packet_size;
 
-    int i = EP_NUM(endpoint);
-    int d = EP_DIR(endpoint) == DIR_IN ? 0 : 1;
+    int i = EP_NUM(ep);
+    int d = EP_DIR(ep) == DIR_IN ? 0 : 1;
 
-    if (EP_DIR(endpoint) == DIR_IN) {
+    if (EP_DIR(ep) == DIR_IN) {
         USB_IEP_CTRL(i) = USB_EP_CTRL_FLUSH |
                           USB_EP_CTRL_SNAK  |
                           USB_EP_CTRL_ACT   |
@@ -362,18 +364,17 @@ int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
                           (type << 4);
         USB_DEV_EP_INTR_MASK &= ~(1<<(16+i));
     }
-    return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint) {
-    int i = EP_NUM(endpoint);
-    int d = EP_DIR(endpoint) == DIR_IN ? 0 : 1;
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
+{
+    (void)ctx;
+    int i = EP_NUM(ep);
+    int d = EP_DIR(ep) == DIR_IN ? 0 : 1;
 
     endpoints[i][d].state = 0;
     USB_DEV_EP_INTR_MASK |= (1<<(16*d+i));
     USB_EP_CTRL(i, !d) = USB_EP_CTRL_FLUSH | USB_EP_CTRL_SNAK;
-
-    return 0;
 }
 
 void usb_drv_cancel_all_transfers(void)

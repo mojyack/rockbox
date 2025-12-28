@@ -1371,6 +1371,8 @@ Lyre prototype 1 */
 /* define optional apis */
 #if CONFIG_USBOTG == USBOTG_ARC
 #define USB_BATCH_SLOTS 16
+#else
+#define USB_BATCH_SLOTS 0
 #endif
 
 /* define the class drivers to enable */

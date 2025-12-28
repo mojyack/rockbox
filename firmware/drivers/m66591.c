@@ -640,7 +640,8 @@ void usb_drv_set_test_mode(int mode) {
     M66591_TESTMODE |= mode;
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size) {
+    (void)ctx;
     (void)max_packet_size; /* FIXME: support max packet size override */
 
     int pipecfg;
@@ -651,12 +652,11 @@ int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
     } else if(type == USB_ENDPOINT_XFER_BULK) {
         pipecfg |= 1<<13;
     } else {
-        /* Not a supported type */
-        return -1;
+        panicf("mxx: unsupported type %d", type);
     }
 
-    int num = endpoint & USB_ENDPOINT_NUMBER_MASK;
-    int dir = endpoint & USB_ENDPOINT_DIR_MASK;
+    int num = ep & USB_ENDPOINT_NUMBER_MASK;
+    int dir = ep & USB_ENDPOINT_DIR_MASK;
     if (dir == USB_DIR_IN) {
         pipecfg |= (1<<4);
     }
@@ -676,16 +676,16 @@ int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
     pipe_init(num);
     
     logf("mxx: ep req ep#: %d config: 0x%04x", num, M66591_PIPE_CFGWND);
-
-    return 0;
 }
 
 /* Used by stack to tell the helper functions that the pipe is not in use */
-int usb_drv_deinit_endpoint(int endpoint) {
-    int num = endpoint & USB_ENDPOINT_NUMBER_MASK;
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep) {
+    (void)ctx;
+
+    int num = ep & USB_ENDPOINT_NUMBER_MASK;
 
     if (num < 1 || num > USB_NUM_ENDPOINTS) {
-        return -1;
+        return;
     }
 
     int flags = disable_irq_save();
@@ -695,8 +695,6 @@ int usb_drv_deinit_endpoint(int endpoint) {
     M66591_eps[num].dir = -1;
 
     restore_irq(flags);
-
-    return 0;
 }
 
 /* Periodically called to check if a cable was plugged into the device */

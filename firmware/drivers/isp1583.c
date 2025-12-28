@@ -626,15 +626,15 @@ void usb_drv_cancel_all_transfers(void)
         endpoints[i].halt[0] = endpoints[i].halt[1] = 1;
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size)
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
 {
+    (void)ctx;
     (void)max_packet_size; /* FIXME: support max packet size override */
-    return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint)
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
 {
-    return 0;
+    (void)ctx;
 }
 
 static void bus_reset(void)

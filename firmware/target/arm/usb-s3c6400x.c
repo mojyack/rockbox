@@ -588,19 +588,21 @@ void INT_USB_FUNC(void)
     GINTSTS = sts;
 }
 
-int usb_drv_init_endpoint(int endpoint, int type, int max_packet_size) {
+void usb_drv_ep_init(const struct usb_drv_ep_alloc_ctx* ctx, int ep, int type, int max_packet_size)
+{
+    (void)ctx;
     (void)max_packet_size; /* FIXME: support max packet size override */
 
-    int num = EP_NUM(endpoint);
-    int dir = EP_DIR(endpoint);
+    int num = EP_NUM(ep);
+    int dir = EP_DIR(ep);
     bool out = dir == DIR_OUT;
     DEPCTL(num, out) = (DEPCTL(num, out) & ~(DEPCTL_eptype_bits << DEPCTL_eptype_bitp))
             | DEPCTL_setd0pid | (type << DEPCTL_eptype_bitp) | DEPCTL_usbactep;
-    return 0;
 }
 
-int usb_drv_deinit_endpoint(int endpoint) {
-    return 0;
+void usb_drv_ep_deinit(const struct usb_drv_ep_alloc_ctx* ctx, int ep)
+{
+    (void)ctx;
 }
 
 void usb_drv_cancel_all_transfers()
