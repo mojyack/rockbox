@@ -17,6 +17,7 @@
  * KIND, either express or implied.
  *
  ****************************************************************************/
+#include "audiohw.h"
 #include "core_alloc.h"
 #include "pcm-internal.h"
 #include "pcm_sampr.h"
@@ -120,10 +121,21 @@ start:
 
     /* fill this single packet */
     struct StagingBuffer* stage = &staging_buffers[staging_buffer_index];
-    const size_t          copy  = MIN(packet_size - stage->cursor, pulled_buf_size - pulled_buf_cursor);
-    memcpy(stage->buf.ptr + stage->cursor, pulled_buf + pulled_buf_cursor, copy);
-    pulled_buf_cursor += copy;
-    stage->cursor += copy;
+    if(PCM_NATIVE_BITDEPTH == 24) {
+        const size_t copy = MIN(packet_size - stage->cursor, (pulled_buf_size - pulled_buf_cursor) / 2);
+        int16_t*     dst  = (void*)stage->buf.ptr + stage->cursor;
+        int32_t*     src  = (void*)pulled_buf + pulled_buf_cursor;
+        for(size_t i = 0; i < copy / sizeof(int16_t); i += 1) {
+            dst[i] = src[i] >> 8;
+        }
+        pulled_buf_cursor += copy * 2;
+        stage->cursor += copy;
+    } else if(PCM_NATIVE_BITDEPTH == 16) {
+        const size_t copy = MIN(packet_size - stage->cursor, pulled_buf_size - pulled_buf_cursor);
+        memcpy(stage->buf.ptr + stage->cursor, pulled_buf + pulled_buf_cursor, copy);
+        pulled_buf_cursor += copy;
+        stage->cursor += copy;
+    }
 #define AUDIO_STAT 0
 #if AUDIO_STAT == 1
     static int last_hz;
