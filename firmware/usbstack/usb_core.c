@@ -87,6 +87,11 @@
 #define NUM_CONFIGS 1
 #endif
 
+#if USB_VENDOR_ID != 0x05ac
+#define USB_VENDOR_ID 0x05ac
+#define USB_PRODUCT_ID 0x1209
+#endif
+
 /*-------------------------------------------------------------------------*/
 /* USB protocol descriptors: */
 

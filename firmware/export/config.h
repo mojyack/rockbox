@@ -1392,7 +1392,7 @@ Lyre prototype 1 */
 #define USB_ENABLE_AUDIO
 #endif
 
-#if defined(USB_HAS_INTERRUPT) && defined(USB_HAS_ISOCHRONOUS) && USB_VENDOR_ID == 0x05ac
+#if defined(USB_HAS_INTERRUPT) && defined(USB_HAS_ISOCHRONOUS)
 #define USB_ENABLE_IAP
 #endif
 
