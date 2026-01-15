@@ -155,7 +155,7 @@ void main(void)
             break;
 
         case SYS_USB_CONNECTED:
-            usb_acknowledge(SYS_USB_CONNECTED_ACK);
+            usb_acknowledge(SYS_USB_CONNECTED_ACK, button_get_data());
             is_usb_connected = true;
             break;
 

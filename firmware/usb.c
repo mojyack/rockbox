@@ -453,7 +453,7 @@ static bool usb_handle_connected_ack(void)
 {
     if(usb_num_acks_to_expect > 0 && --usb_num_acks_to_expect == 0)
     {
-        DEBUGF("usb: all threads have acknowledged the connect.\n");
+        _logf("usb: all threads have acknowledged the connect.\n");
         if(usb_host_present)
         {
             usb_slave_mode(true);
@@ -462,7 +462,7 @@ static bool usb_handle_connected_ack(void)
     }
     else
     {
-        DEBUGF("usb: got ack, %d to go...\n", usb_num_acks_to_expect);
+        _logf("usb: got ack, %d to go...\n", usb_num_acks_to_expect);
     }
 
     return false;
@@ -765,9 +765,9 @@ void usb_start_monitoring(void)
 #endif /* USB_STATUS_BY_EVENT */
 #endif /* USB_FULL_INIT */
 
-void usb_acknowledge(long id)
+void usb_acknowledge(long id, intptr_t seqnum)
 {
-    queue_post(&usb_queue, id, 0);
+    queue_post(&usb_queue, id, seqnum);
 }
 
 void usb_init(void)
@@ -901,9 +901,10 @@ bool usb_inserted(void)
     return false;
 }
 
-void usb_acknowledge(long id)
+void usb_acknowledge(long id, intptr_t seqnum)
 {
     (void)id;
+    (void)seqnum;
 }
 
 void usb_init(void)
