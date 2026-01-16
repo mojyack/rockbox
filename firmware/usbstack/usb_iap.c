@@ -396,7 +396,7 @@ static int usb_iap_init_connection(void) {
         .usb_highspeed         = usb_drv_port_speed(),
         .ignore_hid_report_id  = iap_true,
         .artwork_single_report = iap_false,
-        .enable_packet_dump    = iap_false,
+        .enable_packet_dump    = iap_true,
     };
     check_act(iap_init_ctx(ctx, opts, &platform), goto cleanup_audio);
     _iap_release_ctx();

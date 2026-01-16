@@ -20,7 +20,7 @@
 #pragma once
 
 /* debug switches */
-#define DEBUG_ENABLE_INFO     0
+#define DEBUG_ENABLE_INFO     1
 #define DEBUG_ENABLE_ERROR    1
 #define DEBUG_LCD_PRINT       0
 #define DEBUG_DUMP_TX         0
