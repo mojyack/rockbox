@@ -978,7 +978,9 @@ static void request_handler_device(struct usb_ctrlrequest* req, uint8_t* reqdata
              * should just handle it themselves. We don't care beyond
              * knowing if we've been assigned an address yet, or not. */
             address = req->wValue;
-            usb_drv_cancel_all_transfers();
+            /* FIXME: We should call usb_drv_cancel_all_transfers() here,
+             * but doing so makes some iPod Docks (e.g. ONKYO ND-S1) to
+             * reset bus. */
             usb_core_control_response(USB_CONTROL_ACK, NULL, 0);
             usb_drv_set_address(address);
             usb_core_do_set_addr(address);
