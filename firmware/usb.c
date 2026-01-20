@@ -205,6 +205,8 @@ static inline void usb_handle_hotswap(long id)
 }
 #endif /* HAVE_HOTSWAP */
 
+extern int usb_debug ;
+
 static inline void usb_configure_drivers(int for_state)
 {
 #ifdef USB_ENABLE_AUDIO
@@ -232,7 +234,11 @@ static inline void usb_configure_drivers(int for_state)
         usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, true);
 #endif
 
-        usb_attach();
+        if(usb_debug == 0) {
+            usb_attach();
+        } else {
+            _logf("usb_attach skipped");
+        }
         break;
         /* USB_POWERED: */
 
@@ -250,7 +256,11 @@ static inline void usb_configure_drivers(int for_state)
         usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, false);
 #endif
 
-        usb_attach();
+        if(usb_debug == 0) {
+            usb_attach();
+        } else {
+            _logf("usb_attach skipped");
+        }
         break;
         /* USB_INSERTED: */
 

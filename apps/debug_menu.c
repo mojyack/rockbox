@@ -2800,11 +2800,21 @@ static bool dbg_bootflash_dump(void) {
 }
 #endif
 
+int usb_debug = 0;
+
+static bool usb_debug_0(void) { usb_debug = 0; return false; }
+static bool usb_debug_1(void) { usb_debug = 1; return false; }
+static bool usb_debug_2(void) { usb_debug = 2; return false; }
+
 /****** The menu *********/
 static const struct {
     unsigned char *desc; /* string or ID */
     bool (*function) (void); /* return true if USB was connected */
 } menuitems[] = {
+        {"Show Log File", logfdisplay },
+        {"USB Debug 0", usb_debug_0 },
+        {"USB Debug 1", usb_debug_1 },
+        {"USB Debug 2", usb_debug_2 },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \
@@ -2890,7 +2900,6 @@ static const struct {
         { "View PIC info", dbg_pic },
 #endif
 #ifdef ROCKBOX_HAS_LOGF
-        {"Show Log File", logfdisplay },
         {"Dump Log File", logfdump },
 #endif
 #if defined(HAVE_USBSTACK)
