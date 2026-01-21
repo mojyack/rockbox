@@ -214,11 +214,13 @@ IAPBool iap_platform_get_repeat_setting(struct IAPContext* iap_ctx, uint8_t* sta
 IAPBool iap_platform_set_repeat_setting(struct IAPContext* iap_ctx, uint8_t status) {
     (void)iap_ctx;
 
+    LOG("repeat %d->%d", global_settings.repeat_mode, status);
     /* there are more repeat options in Rockbox rather than iAP.
      * e.g. RB Repeat One and AB are both mapped to iAP Repeat One.
      * so we should not accept iAP Repeat One as RB Repeat One, if we have
      * RB Repeat AB set. */
     if(_iap_convert_repeat_state(global_settings.repeat_mode) == status) {
+        LOG("early return");
         /* already the same (or equievalent) mode set */
         return iap_true;
     }
@@ -232,8 +234,10 @@ IAPBool iap_platform_set_repeat_setting(struct IAPContext* iap_ctx, uint8_t stat
     global_settings.repeat_mode = table[status];
     settings_save();
     if(audio_status() & AUDIO_STATUS_PLAY) {
+        LOG("reload");
         audio_flush_and_reload_tracks();
     }
+    LOG("done");
     return iap_true;
 }
 
