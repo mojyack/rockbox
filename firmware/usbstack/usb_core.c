@@ -440,6 +440,15 @@ static void set_serial_descriptor(void)
 }
 #endif
 
+static void dump_req(const struct usb_ctrlrequest* req)
+{
+    logf("  bRequestType = 0x%02X", req->bRequestType);
+    logf("  bRequest     = 0x%02X", req->bRequest);
+    logf("  wValue       = 0x%04X", req->wValue);
+    logf("  wIndex       = 0x%04X", req->wIndex);
+    logf("  wLength      = 0x%04X", req->wLength);
+}
+
 void usb_core_init(void)
 {
     int i;
@@ -496,7 +505,8 @@ void usb_core_handle_transfer_completion(
     int dir = EP_DIR(event->ep);
 
     if(num == EP_CONTROL) {
-        logf("ctrl handled %ld req=0x%x", current_tick,event->req->bRequest);
+        logf("usb_core: handling control request tick=%ld:", current_tick);
+        dump_req(event->req);
         usb_core_control_request_handler(event->req, usb_control_data, sizeof(usb_control_data));
         return;
     }
@@ -758,8 +768,6 @@ static void control_request_handler_drivers(struct usb_ctrlrequest* req, uint8_t
     }
     if(!handled) {
         /* nope. flag error */
-        logf("bad req 0x%x:0x%x:0x%x:0x%x:0x%x", req->bRequestType,req->bRequest,
-            req->wValue, req->wIndex, req->wLength);
         usb_core_control_response(USB_CONTROL_STALL, NULL, 0);
     }
 }
@@ -1078,8 +1086,6 @@ static void request_handler_endpoint_drivers(struct usb_ctrlrequest* req, uint8_
 
 error:
         /* nope. flag error */
-        logf("bad req 0x%x:0x%x:0x%x:0x%x:0x%x", req->bRequestType,req->bRequest,
-             req->wValue, req->wIndex, req->wLength);
         usb_core_control_response(USB_CONTROL_STALL, NULL, 0);
 }
 
