@@ -42,6 +42,19 @@ void _logf(const char *format, ...) ATTRIBUTE_PRINTF(1, 2);
 
 void logf_panic_dump(int *y);
 
+#define logf_ratelimit(rate, ...)                     \
+{                                                     \
+    static long last_tick = 0;                        \
+    static unsigned suppressed = 0;                   \
+    if(TIME_AFTER(current_tick, last_tick + rate)) {  \
+        last_tick = current_tick;                     \
+        logf(__VA_ARGS__);                            \
+        suppressed = 0;                               \
+    } else {                                          \
+        suppressed += 1;                              \
+    }                                                 \
+}
+
 #else /* !ROCKBOX_HAS_LOGF */
 
 /* built without logf() support enabled, replace logf() by DEBUGF() */
@@ -55,4 +68,6 @@ void logf_panic_dump(int *y);
 #ifndef LOGF_ENABLE
 #undef logf
 #define logf(...) do { } while(0)
+#undef logf_ratelimit
+#define logf_ratelimit(...) do { } while(0)
 #endif
