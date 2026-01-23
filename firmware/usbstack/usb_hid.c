@@ -724,6 +724,7 @@ static bool usb_hid_control_request(struct usb_ctrlrequest *req, uint8_t* reqdat
             rc = usb_hid_get_report(req, dest);
             break;
         case USB_HID_SET_IDLE:
+        case USB_HID_SET_PROTOCOL:
             usb_core_control_response(USB_CONTROL_ACK, NULL, 0);
             return true;
         default:
