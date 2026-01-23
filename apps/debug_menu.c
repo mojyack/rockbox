@@ -2828,12 +2828,21 @@ static bool view_ram_info(void)
 }
 #endif
 
+#define menu(v, n) bool select_##v##_##n(void) {v=n; return false;}
+int debug = 0;
+menu(debug, 0);
+menu(debug, 1);
+menu(debug, 2);
+
 /****** The menu *********/
 static const struct {
     unsigned char *desc; /* string or ID */
     bool (*function) (void); /* return true if USB was connected */
 } menuitems[] = {
         {"Show Log File", logfdisplay },
+        {"Disable logging", select_debug_0 },
+        {"Enable iAP logging", select_debug_1 },
+        {"Enable USB logging", select_debug_2 },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \

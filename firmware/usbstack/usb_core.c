@@ -77,6 +77,12 @@
 #include "ata.h"
 #endif
 
+extern int debug;
+#if defined(ROCKBOX_HAS_LOGF)
+#undef logf
+#define logf(...) if(debug == 2) _logf(__VA_ARGS__)
+#endif
+
 #ifndef USB_MAX_CURRENT
 #define USB_MAX_CURRENT 500
 #endif

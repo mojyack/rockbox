@@ -373,6 +373,8 @@ static int usb_iap_get_config_descriptor(unsigned char* dest, int max_packet_siz
     return dest - orig_dest;
 }
 
+extern int debug;
+
 static int usb_iap_init_connection(void) {
     stream.sample_rate     = 48000;
     last_charge_state      = -1;
@@ -396,7 +398,7 @@ static int usb_iap_init_connection(void) {
         .usb_highspeed         = usb_drv_port_speed(),
         .ignore_hid_report_id  = iap_true,
         .artwork_single_report = iap_false,
-        .enable_packet_dump    = iap_true,
+        .enable_packet_dump    = debug == 1,
     };
     check_act(iap_init_ctx(ctx, opts, &platform), goto cleanup_audio);
     _iap_release_ctx();
