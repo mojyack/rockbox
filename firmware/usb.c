@@ -197,6 +197,8 @@ static inline void usb_handle_hotswap(long id)
 }
 #endif /* HAVE_HOTSWAP */
 
+extern int debug_iap;
+
 static inline void usb_configure_drivers(int for_state)
 {
 #ifdef USB_ENABLE_AUDIO
@@ -242,7 +244,7 @@ static inline void usb_configure_drivers(int for_state)
         usb_core_enable_driver(USB_DRIVER_AUDIO, (usb_audio == 1) || (usb_audio == 3)); // while "always" or "only in mass-storage mode"
 #endif /* USB_ENABLE_AUDIO */
 #ifdef USB_ENABLE_IAP
-        usb_core_enable_driver(USB_DRIVER_IAP, true);
+        usb_core_enable_driver(USB_DRIVER_IAP, debug_iap == 0);
 #endif
 #ifdef USB_ENABLE_CHARGING_ONLY
         usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, false);

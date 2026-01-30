@@ -2833,6 +2833,9 @@ int debug = 0;
 menu(debug, 0);
 menu(debug, 1);
 menu(debug, 2);
+int debug_iap = 0;
+menu(debug_iap, 0);
+menu(debug_iap, 1);
 
 /****** The menu *********/
 static const struct {
@@ -2843,6 +2846,8 @@ static const struct {
         {"Disable logging", select_debug_0 },
         {"Enable iAP logging", select_debug_1 },
         {"Enable USB logging", select_debug_2 },
+        {"Mask iAP", select_debug_iap_1 },
+        {"Unmask iAP", select_debug_iap_0 },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \

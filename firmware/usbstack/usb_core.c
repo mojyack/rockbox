@@ -137,7 +137,7 @@ static struct usb_config_descriptor __attribute__((aligned(2)))
     .bMaxPower           = (USB_MAX_CURRENT + 1) / 2, /* In 2mA units */
 };
 
-static const struct usb_qualifier_descriptor __attribute__((aligned(2)))
+static struct usb_qualifier_descriptor __attribute__((aligned(2)))
                                              qualifier_descriptor =
 {
     .bLength            = sizeof(struct usb_qualifier_descriptor),
@@ -783,6 +783,10 @@ static void control_request_handler_drivers(struct usb_ctrlrequest* req, uint8_t
     }
 }
 
+static int dd_num_configs(void) {
+    return drivers[USB_DRIVER_IAP]->enabled ? NUM_CONFIGS + 1 : NUM_CONFIGS;
+}
+
 static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, uint8_t* reqdata, size_t reqdata_size)
 {
     int size;
@@ -793,6 +797,7 @@ static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, u
 
     switch(type) {
         case USB_DT_DEVICE:
+            device_descriptor.bNumConfigurations = dd_num_configs();
             ptr = &device_descriptor;
             size = sizeof(struct usb_device_descriptor);
             break;
@@ -859,6 +864,7 @@ static void request_handler_device_get_descriptor(struct usb_ctrlrequest* req, u
             break;
 
         case USB_DT_DEVICE_QUALIFIER:
+            qualifier_descriptor.bNumConfigurations = dd_num_configs();
             ptr = &qualifier_descriptor;
             size = sizeof(struct usb_qualifier_descriptor);
             break;
