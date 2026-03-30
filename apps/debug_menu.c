@@ -2836,6 +2836,9 @@ menu(debug, 2);
 int debug_iap = 0;
 menu(debug_iap, 0);
 menu(debug_iap, 1);
+int iap_hid_slow = 0;
+menu(iap_hid_slow, 0);
+menu(iap_hid_slow, 1);
 
 /****** The menu *********/
 static const struct {
@@ -2848,6 +2851,8 @@ static const struct {
         {"Enable USB logging", select_debug_2 },
         {"Mask iAP", select_debug_iap_1 },
         {"Unmask iAP", select_debug_iap_0 },
+        {"Enable iAP Slow HID", select_iap_hid_slow_1 },
+        {"Disable iAP Slow HID", select_iap_hid_slow_0 },
 #if defined(CPU_COLDFIRE) || \
     (defined(CPU_PP) && !(CONFIG_STORAGE & STORAGE_SD)) || \
     CONFIG_CPU == IMX31L || defined(CPU_TCC780X) || CONFIG_CPU == AS3525v2 || \

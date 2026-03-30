@@ -366,6 +366,8 @@ static int usb_iap_get_config_descriptor(unsigned char* dest, int max_packet_siz
         ipod_hid_hid_desc.wDescriptorLength0 = sizeof(ipod_hid_report_fs);
         ipod_hid_endpoint.wMaxPacketSize     = 64;
     }
+    extern int iap_hid_slow;
+    ipod_hid_endpoint.bInterval = iap_hid_slow ? 4 : 1;
     PACK_DESC(ipod_hid_desc);
     PACK_DESC(ipod_hid_hid_desc);
     PACK_DESC(ipod_hid_endpoint);
