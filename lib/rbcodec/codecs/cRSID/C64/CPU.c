@@ -7,127 +7,135 @@ void cRSID_initCPU (cRSID_CPUinstance* CPU, unsigned short mempos) {
 }
 
 
-unsigned char cRSID_emulateCPU (void) { //the CPU emulation for SID/PRG playback (ToDo: CIA/VIC-IRQ/NMI/RESET vectors, BCD-mode)
+enum cRSID_StatusFlagBitValues { cRSID_N=0x80, cRSID_V=0x40, cRSID_B=0x10, cRSID_D=0x08, cRSID_I=0x04, cRSID_Z=0x02, cRSID_C=0x01 };
 
- enum StatusFlagBitValues { N=0x80, V=0x40, B=0x10, D=0x08, I=0x04, Z=0x02, C=0x01 };
+static const unsigned char FlagSwitches[]={0x01,0x21,0x04,0x24,0x00,0x40,0x08,0x28}, BranchFlags[]={0x80,0x40,0x01,0x02};
 
- static const unsigned char FlagSwitches[]={0x01,0x21,0x04,0x24,0x00,0x40,0x08,0x28}, BranchFlags[]={0x80,0x40,0x01,0x02};
+static cRSID_C64instance* const cRSID_C64p = &cRSID_C64; //could be a parameter but function-call is faster this way if only 1 main CPU exists
+static cRSID_CPUinstance* const cRSID_CPUp = &cRSID_C64.CPU;
 
+static char Cycles, SamePage;
+static unsigned char IR, ST, X, Y;
+static short int A, SP, T;
+static unsigned int PC, Addr, PrevPC;
 
- static cRSID_C64instance* const C64 = &cRSID_C64; //could be a parameter but function-call is faster this way if only 1 main CPU exists
- static cRSID_CPUinstance* const CPU = &C64->CPU;
+#define N cRSID_N
+#define V cRSID_V
+#define B cRSID_B
+#define D cRSID_D
+#define I cRSID_I
+#define Z cRSID_Z
+#define C cRSID_C
+#define C64 cRSID_C64p
+#define CPU cRSID_CPUp
 
- static char Cycles, SamePage;
- static unsigned char IR, ST, X, Y;
- static short int A, SP, T;
- static unsigned int PC, Addr, PrevPC;
+static inline void loadReg (void) { PC = CPU->PC; SP = CPU->SP; ST = CPU->ST; A = CPU->A; X = CPU->X; Y = CPU->Y; }
+static inline void storeReg (void) { CPU->PC = PC; CPU->SP = SP; CPU->ST = ST; CPU->A = A; CPU->X = X; CPU->Y = Y; }
 
-
- inline void loadReg (void) { PC = CPU->PC; SP = CPU->SP; ST = CPU->ST; A = CPU->A; X = CPU->X; Y = CPU->Y; }
- inline void storeReg (void) { CPU->PC = PC; CPU->SP = SP; CPU->ST = ST; CPU->A = A; CPU->X = X; CPU->Y = Y; }
-
- inline unsigned char rd (register unsigned short address) {
-  static unsigned char value;
-  value = *cRSID_getMemReadPtr(address);
-  if (C64->RealSIDmode) {
-   if ( C64->RAMbank[1] & 3 ) {
-    if (address==0xDC0D) { cRSID_acknowledgeCIAIRQ( &C64->CIA[1] ); }
-    else if (address==0xDD0D) { cRSID_acknowledgeCIAIRQ( &C64->CIA[2] ); }
-   }
-  }
-  return value;
- }
-
- inline void wr (register unsigned short address, register unsigned char data) {
-  *cRSID_getMemWritePtr(address)=data;
-  if ( C64->RealSIDmode && (C64->RAMbank[1] & 3) ) {
-   //if(data&1) { //only writing 1 to $d019 bit0 would acknowledge, not any value (but RMW instructions write $d019 back before mod.)
-    if (address==0xD019) { cRSID_acknowledgeVICrasterIRQ( &C64->VIC ); }
-   //}
-  }
- }
-
- inline void wr2 (register unsigned short address, register unsigned char data) { //PSID-hack specific memory-write
-  static int Tmp;
-  *cRSID_getMemWritePtr(address)=data;
+static inline unsigned char rd (register unsigned short address) {
+ static unsigned char value;
+ value = *cRSID_getMemReadPtr(address);
+ if (C64->RealSIDmode) {
   if ( C64->RAMbank[1] & 3 ) {
-   if (C64->RealSIDmode) {
-    if (address==0xDC0D) cRSID_writeCIAIRQmask( &C64->CIA[1], data );
-    else if (address==0xDD0D) cRSID_writeCIAIRQmask( &C64->CIA[2], data );
-    else if (address==0xDD0C) C64->IObankRD[address]=data; //mirror WR to RD (e.g. Wonderland_XIII_tune_1.sid)
-    //#ifdef CRSID_PLATFORM_PC //just for info displayer
-    // else if (address==0xDC05 || address==0xDC04) C64->FrameCycles = ( (C64->IObankWR[0xDC04] + (C64->IObankWR[0xDC05]<<8)) );
-    //#endif
-    else if(address==0xD019 && data&1) { //only writing 1 to $d019 bit0 would acknowledge
-     cRSID_acknowledgeVICrasterIRQ( &C64->VIC );
-    }
-   }
-
-   else {
-    switch (address) {
-     case 0xDC05: case 0xDC04:
-      if (C64->TimerSource ) { //dynamic CIA-setting (Galway/Rubicon workaround)
-       C64->FrameCycles = ( (C64->IObankWR[0xDC04] + (C64->IObankWR[0xDC05]<<8)) ); //<< 4) / C64->SampleClockRatio;
-      }
-      break;
-     case 0xDC08: C64->IObankRD[0xDC08] = data; break; //refresh TOD-clock
-     case 0xDC09: C64->IObankRD[0xDC09] = data; break; //refresh TOD-clock
-     case 0xD012: //dynamic VIC IRQ-rasterline setting (Microprose Soccer V1 workaround)
-      if (C64->PrevRasterLine>=0) { //was $d012 set before? (or set only once?)
-       if (C64->IObankWR[0xD012] != C64->PrevRasterLine) {
-        Tmp = C64->IObankWR[0xD012] - C64->PrevRasterLine;
-        if (Tmp<0) Tmp += C64->VIC.RasterLines;
-        C64->FrameCycleCnt = C64->FrameCycles - Tmp * C64->VIC.RasterRowCycles;
-       }
-      }
-      C64->PrevRasterLine = C64->IObankWR[0xD012];
-      break;
-    }
-   }
-
+   if (address==0xDC0D) { cRSID_acknowledgeCIAIRQ( &C64->CIA[1] ); }
+   else if (address==0xDD0D) { cRSID_acknowledgeCIAIRQ( &C64->CIA[2] ); }
   }
  }
+ return value;
+}
 
-
- inline void addrModeImmediate (void) { ++PC; Addr=PC; Cycles=2; } //imm.
- inline void addrModeZeropage (void) { ++PC; Addr=rd(PC); Cycles=3; } //zp
- inline void addrModeAbsolute (void) { ++PC; Addr = rd(PC); ++PC; Addr += rd(PC)<<8; Cycles=4; } //abs
- inline void addrModeZeropageXindexed (void) { ++PC; Addr = (rd(PC) + X) & 0xFF; Cycles=4; } //zp,x (with zeropage-wraparound of 6502)
- inline void addrModeZeropageYindexed (void) { ++PC; Addr = (rd(PC) + Y) & 0xFF; Cycles=4; } //zp,y (with zeropage-wraparound of 6502)
-
- inline void addrModeXindexed (void) { // abs,x (only STA is 5 cycles, others are 4 if page not crossed, RMW:7)
-  ++PC; Addr = rd(PC) + X; ++PC; SamePage = (Addr <= 0xFF); Addr += rd(PC)<<8; Cycles=5;
+static inline void wr (register unsigned short address, register unsigned char data) {
+ *cRSID_getMemWritePtr(address)=data;
+ if ( C64->RealSIDmode && (C64->RAMbank[1] & 3) ) {
+  //if(data&1) { //only writing 1 to $d019 bit0 would acknowledge, not any value (but RMW instructions write $d019 back before mod.)
+   if (address==0xD019) { cRSID_acknowledgeVICrasterIRQ( &C64->VIC ); }
+  //}
  }
+}
 
- inline void addrModeYindexed (void) { // abs,y (only STA is 5 cycles, others are 4 if page not crossed, RMW:7)
-  ++PC; Addr = rd(PC) + Y; ++PC; SamePage = (Addr <= 0xFF); Addr += rd(PC)<<8; Cycles=5;
+static inline void wr2 (register unsigned short address, register unsigned char data) { //PSID-hack specific memory-write
+ static int Tmp;
+ *cRSID_getMemWritePtr(address)=data;
+ if ( C64->RAMbank[1] & 3 ) {
+  if (C64->RealSIDmode) {
+   if (address==0xDC0D) cRSID_writeCIAIRQmask( &C64->CIA[1], data );
+   else if (address==0xDD0D) cRSID_writeCIAIRQmask( &C64->CIA[2], data );
+   else if (address==0xDD0C) C64->IObankRD[address]=data; //mirror WR to RD (e.g. Wonderland_XIII_tune_1.sid)
+   //#ifdef CRSID_PLATFORM_PC //just for info displayer
+   // else if (address==0xDC05 || address==0xDC04) C64->FrameCycles = ( (C64->IObankWR[0xDC04] + (C64->IObankWR[0xDC05]<<8)) );
+   //#endif
+   else if(address==0xD019 && data&1) { //only writing 1 to $d019 bit0 would acknowledge
+    cRSID_acknowledgeVICrasterIRQ( &C64->VIC );
+   }
+  }
+
+  else {
+   switch (address) {
+    case 0xDC05: case 0xDC04:
+     if (C64->TimerSource ) { //dynamic CIA-setting (Galway/Rubicon workaround)
+      C64->FrameCycles = ( (C64->IObankWR[0xDC04] + (C64->IObankWR[0xDC05]<<8)) ); //<< 4) / C64->SampleClockRatio;
+     }
+     break;
+    case 0xDC08: C64->IObankRD[0xDC08] = data; break; //refresh TOD-clock
+    case 0xDC09: C64->IObankRD[0xDC09] = data; break; //refresh TOD-clock
+    case 0xD012: //dynamic VIC IRQ-rasterline setting (Microprose Soccer V1 workaround)
+     if (C64->PrevRasterLine>=0) { //was $d012 set before? (or set only once?)
+      if (C64->IObankWR[0xD012] != C64->PrevRasterLine) {
+       Tmp = C64->IObankWR[0xD012] - C64->PrevRasterLine;
+       if (Tmp<0) Tmp += C64->VIC.RasterLines;
+       C64->FrameCycleCnt = C64->FrameCycles - Tmp * C64->VIC.RasterRowCycles;
+      }
+     }
+     C64->PrevRasterLine = C64->IObankWR[0xD012];
+     break;
+   }
+  }
+
  }
-
- inline void addrModeIndirectYindexed (void) { // (zp),y (only STA is 6 cycles, others are 5 if page not crossed, RMW:8)
-  ++PC; Addr = rd(rd(PC)) + Y; SamePage = (Addr <= 0xFF); Addr += rd( (rd(PC)+1)&0xFF ) << 8; Cycles=6;
- }
-
- inline void addrModeXindexedIndirect (void) { // (zp,x)
-  ++PC; Addr = ( rd(rd(PC)+X)&0xFF ) + ( ( rd(rd(PC)+X+1)&0xFF ) << 8 ); Cycles=6;
- }
+}
 
 
- inline void clrC (void) { ST &= ~C; } //clear Carry-flag
- inline void setC (unsigned char expr) { ST &= ~C; ST |= (expr!=0); } //set Carry-flag if expression is not zero
- inline void clrNZC (void) { ST &= ~(N|Z|C); } //clear flags
- inline void clrNVZC (void) { ST &= ~(N|V|Z|C); } //clear flags
- inline void setNZbyA (void) { ST &= ~(N|Z); ST |= ((!A)<<1) | (A&N); } //set Negative-flag and Zero-flag based on result in Accumulator
- inline void setNZbyT (void) { T&=0xFF; ST &= ~(N|Z); ST |= ((!T)<<1) | (T&N); }
- inline void setNZbyX (void) { ST &= ~(N|Z); ST |= ((!X)<<1) | (X&N); } //set Negative-flag and Zero-flag based on result in X-register
- inline void setNZbyY (void) { ST &= ~(N|Z); ST |= ((!Y)<<1) | (Y&N); } //set Negative-flag and Zero-flag based on result in Y-register
- inline void setNZbyM (void) { ST &= ~(N|Z); ST |= ((!rd(Addr))<<1) | (rd(Addr)&N); } //set Negative-flag and Zero-flag based on result at Memory-Address
- inline void setNZCbyAdd (void) { ST &= ~(N|Z|C); ST |= (A&N)|(A>255); A&=0xFF; ST|=(!A)<<1; } //after increase/addition
- inline void setVbyAdd (unsigned char M) { ST &= ~V; ST |= ( (~(T^M)) & (T^A) & N ) >> 1; } //calculate V-flag from A and T (previous A) and input2 (Memory)
- inline void setNZCbySub (signed short* obj) { ST &= ~(N|Z|C); ST |= (*obj&N) | (*obj>=0); *obj&=0xFF; ST |= ((!(*obj))<<1); }
+static inline void addrModeImmediate (void) { ++PC; Addr=PC; Cycles=2; } //imm.
+static inline void addrModeZeropage (void) { ++PC; Addr=rd(PC); Cycles=3; } //zp
+static inline void addrModeAbsolute (void) { ++PC; Addr = rd(PC); ++PC; Addr += rd(PC)<<8; Cycles=4; } //abs
+static inline void addrModeZeropageXindexed (void) { ++PC; Addr = (rd(PC) + X) & 0xFF; Cycles=4; } //zp,x (with zeropage-wraparound of 6502)
+static inline void addrModeZeropageYindexed (void) { ++PC; Addr = (rd(PC) + Y) & 0xFF; Cycles=4; } //zp,y (with zeropage-wraparound of 6502)
 
- inline void push (unsigned char value) { C64->RAMbank[0x100+SP] = value; --SP; SP&=0xFF; } //push a value to stack
- inline unsigned char pop (void) { ++SP; SP&=0xFF; return C64->RAMbank[0x100+SP]; } //pop a value from stack
+static inline void addrModeXindexed (void) { // abs,x (only STA is 5 cycles, others are 4 if page not crossed, RMW:7)
+ ++PC; Addr = rd(PC) + X; ++PC; SamePage = (Addr <= 0xFF); Addr += rd(PC)<<8; Cycles=5;
+}
 
+static inline void addrModeYindexed (void) { // abs,y (only STA is 5 cycles, others are 4 if page not crossed, RMW:7)
+ ++PC; Addr = rd(PC) + Y; ++PC; SamePage = (Addr <= 0xFF); Addr += rd(PC)<<8; Cycles=5;
+}
+
+static inline void addrModeIndirectYindexed (void) { // (zp),y (only STA is 6 cycles, others are 5 if page not crossed, RMW:8)
+ ++PC; Addr = rd(rd(PC)) + Y; SamePage = (Addr <= 0xFF); Addr += rd( (rd(PC)+1)&0xFF ) << 8; Cycles=6;
+}
+
+static inline void addrModeXindexedIndirect (void) { // (zp,x)
+ ++PC; Addr = ( rd(rd(PC)+X)&0xFF ) + ( ( rd(rd(PC)+X+1)&0xFF ) << 8 ); Cycles=6;
+}
+
+
+static inline void clrC (void) { ST &= ~C; } //clear Carry-flag
+static inline void setC (unsigned char expr) { ST &= ~C; ST |= (expr!=0); } //set Carry-flag if expression is not zero
+static inline void clrNZC (void) { ST &= ~(N|Z|C); } //clear flags
+static inline void clrNVZC (void) { ST &= ~(N|V|Z|C); } //clear flags
+static inline void setNZbyA (void) { ST &= ~(N|Z); ST |= ((!A)<<1) | (A&N); } //set Negative-flag and Zero-flag based on result in Accumulator
+static inline void setNZbyT (void) { T&=0xFF; ST &= ~(N|Z); ST |= ((!T)<<1) | (T&N); }
+static inline void setNZbyX (void) { ST &= ~(N|Z); ST |= ((!X)<<1) | (X&N); } //set Negative-flag and Zero-flag based on result in X-register
+static inline void setNZbyY (void) { ST &= ~(N|Z); ST |= ((!Y)<<1) | (Y&N); } //set Negative-flag and Zero-flag based on result in Y-register
+static inline void setNZbyM (void) { ST &= ~(N|Z); ST |= ((!rd(Addr))<<1) | (rd(Addr)&N); } //set Negative-flag and Zero-flag based on result at Memory-Address
+static inline void setNZCbyAdd (void) { ST &= ~(N|Z|C); ST |= (A&N)|(A>255); A&=0xFF; ST|=(!A)<<1; } //after increase/addition
+static inline void setVbyAdd (unsigned char M) { ST &= ~V; ST |= ( (~(T^M)) & (T^A) & N ) >> 1; } //calculate V-flag from A and T (previous A) and input2 (Memory)
+static inline void setNZCbySub (signed short* obj) { ST &= ~(N|Z|C); ST |= (*obj&N) | (*obj>=0); *obj&=0xFF; ST |= ((!(*obj))<<1); }
+
+static inline void push (unsigned char value) { C64->RAMbank[0x100+SP] = value; --SP; SP&=0xFF; } //push a value to stack
+static inline unsigned char pop (void) { ++SP; SP&=0xFF; return C64->RAMbank[0x100+SP]; } //pop a value from stack
+
+
+unsigned char cRSID_emulateCPU (void) { //the CPU emulation for SID/PRG playback (ToDo: CIA/VIC-IRQ/NMI/RESET vectors, BCD-mode)
 
  loadReg(); PrevPC=PC;
  IR = rd(PC); Cycles=2; SamePage=0; //'Cycles': ensure smallest 6510 runtime (for implied/register instructions)
@@ -398,26 +406,36 @@ unsigned char cRSID_emulateCPU (void) { //the CPU emulation for SID/PRG playback
  return Cycles;
 }
 
+#undef N
+#undef V
+#undef B
+#undef D
+#undef I
+#undef Z
+#undef C
+#undef C64
+#undef CPU
 
 
  //handle entering into IRQ and NMI interrupt
 static inline char cRSID_handleCPUinterrupts (cRSID_CPUinstance* CPU) {
  enum StatusFlagBitValues { B=0x10, I=0x04 };
- inline void push (unsigned char value) { CPU->C64->RAMbank[0x100+CPU->SP] = value; --CPU->SP; CPU->SP&=0xFF; } //push a value to stack
+ #define cRSID_irq_push(CPU, value) do { CPU->C64->RAMbank[0x100+CPU->SP] = (value); --CPU->SP; CPU->SP&=0xFF; } while(0)
 
  if (CPU->C64->NMI > CPU->PrevNMI) { //if IRQ and NMI at the same time, NMI is serviced first
-  push(CPU->PC>>8); push(CPU->PC&0xFF); push(CPU->ST); CPU->ST |= I;
+  cRSID_irq_push(CPU, CPU->PC>>8); cRSID_irq_push(CPU, CPU->PC&0xFF); cRSID_irq_push(CPU, CPU->ST); CPU->ST |= I;
   CPU->PC = *cRSID_getMemReadPtr(0xFFFA) + (*cRSID_getMemReadPtr(0xFFFB)<<8); //NMI-vector
   CPU->PrevNMI = CPU->C64->NMI;
   return 1;
  }
  else if ( CPU->C64->IRQ && !(CPU->ST&I) ) {
-  push(CPU->PC>>8); push(CPU->PC&0xFF); push(CPU->ST); CPU->ST |= I;
+  cRSID_irq_push(CPU, CPU->PC>>8); cRSID_irq_push(CPU, CPU->PC&0xFF); cRSID_irq_push(CPU, CPU->ST); CPU->ST |= I;
   CPU->PC = *cRSID_getMemReadPtr(0xFFFE) + (*cRSID_getMemReadPtr(0xFFFF)<<8); //maskable IRQ-vector
   CPU->PrevNMI = CPU->C64->NMI;
   return 1;
  }
  CPU->PrevNMI = CPU->C64->NMI; //prepare for NMI edge-detection
 
+ #undef cRSID_irq_push
  return 0;
 }
