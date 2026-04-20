@@ -39,10 +39,10 @@ SDLFLAGS = -I$(SDL_SRCDIR)/include $(filter-out -O%,$(PLUGINFLAGS))		\
 #-ffast-math -funroll-loops -fomit-frame-pointer -fexpensive-optimizations	\
 #-D_GNU_SOURCE=1 -D_REENTRANT -DSDL -DELF
 
-# CTRU does need these to avoid compiler errors
-ifeq ($(APP_TYPE),ctru-app)
-SDLFLAGS += -Wno-int-conversion -Wno-incompatible-pointer-types        \
--Wno-implicit-function-declaration -Wno-implicit-int
+SDLFLAGS += -Wno-error=int-conversion -Wno-error=incompatible-pointer-types \
+-Wno-error=implicit-function-declaration -Wno-error=implicit-int
+ifneq (,$(findstring clang,$(CC)))
+SDLFLAGS += -Wno-error=incompatible-function-pointer-types
 endif
 
 ifndef APP_TYPE
