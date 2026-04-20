@@ -1399,7 +1399,7 @@ static void sab_process_dir(struct file_base_info *infop, bool issab)
     struct dirsab
     {
         struct sab           sab;
-        struct sab_component stack[issab ? DIRCACHE_MAX_DEPTH : 1];
+        struct sab_component stack[DIRCACHE_MAX_DEPTH];
     } dirsab;
     struct sab *sabp = &dirsab.sab;
 
