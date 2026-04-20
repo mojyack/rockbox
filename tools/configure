@@ -72,6 +72,21 @@ prefixtools() {
     OC=${prefix}objcopy
 }
 
+llvmtools() {
+    target_triple="$1"
+    clang=$(findtool clang --lit)
+    CC="$clang --target=${target_triple}"
+    CPP="$clang --target=${target_triple} -E"
+    LD=$(findtool ld.lld --lit)
+    AR=$(findtool llvm-ar --lit)
+    AS="$clang --target=${target_triple}"
+    OC=$(findtool llvm-objcopy --lit)
+    RANLIB=$(findtool llvm-ranlib --lit)
+    WINDRES=
+    DLLTOOL=
+    DLLWRAP=
+}
+
 app_set_paths() {
     # setup files and paths depending on the platform
     if [ -z "$ARG_PREFIX" ]; then
@@ -136,9 +151,22 @@ app_set_lcd_size() {
     app_lcd_height="#define LCD_HEIGHT $app_lcd_height"
 }
 
-findarmgcc() {
-    prefixtools arm-elf-eabi-
-    gccchoice="9.5.0"
+findarmtools() {
+    if [ "$ARG_LLVM" = "1" ]; then
+        llvmtools arm-none-eabi
+    else
+        prefixtools arm-elf-eabi-
+        gccchoice="9.5.0"
+    fi
+}
+
+findmipseltools() {
+    if [ "$ARG_LLVM" = "1" ]; then
+        llvmtools mipsel-unknown-elf
+    else
+        prefixtools mipsel-elf-
+        gccchoice="9.5.0"
+    fi
 }
 
 # scan the $PATH for the given command
@@ -546,79 +574,77 @@ coldfirecc() {
 }
 
 arm7tdmicc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm7tdmi"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm9tdmicc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm9tdmi"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm940tcc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm940t"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm926ejscc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm926ej-s"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm1136jfscc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm1136jf-s -mfloat-abi=softfp"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm1176jzscc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -mcpu=arm1176jz-s"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 arm7ejscc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -march=armv5te"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 armcortexm7cc() {
-    findarmgcc
+    findarmtools
     GCCOPTS="$CCOPTS -march=armv7e-m -mcpu=cortex-m7"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
 }
 
 mipselcc() {
-    prefixtools mipsel-elf-
+    findmipseltools
     # mips is predefined, but we want it for paths. use __mips instead
     GCCOPTS="$CCOPTS -march=mips32 -mtune=r4600 -mno-mips16 -mno-long-calls -Umips"
     GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
-    gccchoice="9.5.0"
 }
 
 mipsr2elcc() {
-    prefixtools mipsel-elf-
+    findmipseltools
     # mips is predefined, but we want it for paths. use __mips instead
     GCCOPTS="$CCOPTS -march=mips32r2 -mno-mips16 -mno-long-calls -Umips"
     GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
     GCCOPTIMIZE="-fomit-frame-pointer"
     endian="little"
-    gccchoice="9.5.0"
 }
 
 arm1176jzlinuxcc() {
@@ -1531,6 +1557,7 @@ help() {
                       enables the normal -fstack-protector option.
     --32-bit          Force a 32-bit simulator (use with --sdl-threads for duke3d)
     --prefix          Target installation directory
+    --llvm            Use LLVM/Clang toolchain instead of GCC
     --compiler-prefix Override compiler prefix (inherently dangerous)
     --help            Shows this message (must not be used with other options)
 
@@ -1557,6 +1584,7 @@ ARG_ADDR_SAN=
 ARG_UBSAN=
 ARG_STACK_PROTECTOR=
 ARG_PLUGINS=
+ARG_LLVM=0
 err=
 for arg in "$@"; do
     case "$arg" in
@@ -1586,6 +1614,7 @@ for arg in "$@"; do
     --with-stack-protector=*) ARG_STACK_PROTECTOR=$(echo "$arg" | cut -d = -f 2) ;;
     --with-stack-protector) ARG_STACK_PROTECTOR=default ;;
     --prefix=*) ARG_PREFIX=$(echo "$arg" | cut -d = -f 2) ;;
+    --llvm) ARG_LLVM=1 ;;
     --compiler-prefix=*) ARG_COMPILER_PREFIX=$(echo "$arg" | cut -d = -f 2) ;;
     --help) help ;;
     *)
@@ -2021,8 +2050,8 @@ if [ "yes" = "$simulator" ]; then
     fi
 fi
 
-# Now, figure out version number of the (gcc) compiler we are about to use
-gccver=$($CC -dumpversion)
+# Now, figure out version number of the (gcc/clang) compiler we are about to use
+ccver=$($CC -dumpversion)
 
 # figure out the binutil version too
 if [ "yes" = "$simulator" ] || [ "yes" = "$application" ] && [ $uname = "Darwin" ]; then
@@ -2041,74 +2070,97 @@ else
     have_nocrossrefs_to="#undef HAVE_NOCROSSREFS_TO"
 fi
 
-if [ -z "$gccver" ]; then
+if [ -z "$ccver" ]; then
     echo "[WARNING] The compiler you must use ($CC) is not in your path!"
     echo "[WARNING] this may cause your build to fail since we cannot do the"
     echo "[WARNING] checks we want now."
 else
+    if [ $ARG_LLVM = "1" ]; then
+        # Clang version handling
+        ccver2=$($CC -dumpversion | cut -d "-" -f1)
+        num1=$(echo $ccver2 | cut -d . -f1)
+        num2=$(echo $ccver2 | cut -d . -f2)
+        clangnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
 
-    # convert gcc version to a number (major*100 + minor).
-    # Newer compilers may only return the major number, so we neen to fetch the
-    # version using -dumpfullversion. MinGW compilers may return names like
-    # "7.3-win32", so me must strip off the last part.
-    gccver2=$($CC -dumpfullversion -dumpversion | cut -d "-" -f1)
-    num1=$(echo $gccver2 | cut -d . -f1)
-    num2=$(echo $gccver2 | cut -d . -f2)
-    gccnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
+        echo "Using $CC $ccver ($clangnum) [LLVM/Clang]"
 
-    # This makes:
-    # 3.3.X  => 303
-    # 3.4.X  => 304
-    # 2.95.3 => 295
-    # 7.3-win32 => 703
+        # Remove GCC-specific flags that Clang does not support
+        CCOPTS=$(echo "$CCOPTS" | sed -e 's/-funit-at-a-time//' -e 's/-fno-delete-null-pointer-checks//')
+        GCCOPTS=$(echo "$GCCOPTS" | sed -e 's/-funit-at-a-time//' -e 's/-fno-delete-null-pointer-checks//')
 
-    echo "Using $CC $gccver ($gccnum)"
-
-    if test "$gccnum" -ge "400"; then
-        # gcc 4.0 is just *so* much pickier on arguments that differ in signedness
-        # so we ignore that warnings for now
-        # -Wno-pointer-sign
+        # Clang equivalents for common warnings
         GCCOPTS="$GCCOPTS -Wno-pointer-sign"
-    fi
-
-    if test "$gccnum" -ge "402"; then
-        # disable warning about "warning: initialized field overwritten" as gcc 4.2
-        # and later would throw it for several valid cases
         GCCOPTS="$GCCOPTS -Wno-override-init"
-    fi
+        GCCOPTS="$GCCOPTS -Wno-implicit-fallthrough"
+        # Suppress warnings about unused GCC-compatible arguments
+        GCCOPTS="$GCCOPTS -Wno-unknown-warning-option"
 
-    if test "$gccnum" -ge "700"; then
-        # gcc 7 spews a bunch of warnings by default
-        GCCOPTS="$GCCOPTS -Wimplicit-fallthrough=0"
-    fi
+        # Use lld
+        GLOBAL_LDOPTS="$GLOBAL_LDOPTS -fuse-ld=lld"
+    else
+        # GCC version handling
+        # convert gcc version to a number (major*100 + minor).
+        # Newer compilers may only return the major number, so we neen to fetch the
+        # version using -dumpfullversion. MinGW compilers may return names like
+        # "7.3-win32", so me must strip off the last part.
+        ccver2=$($CC -dumpfullversion -dumpversion | cut -d "-" -f1)
+        num1=$(echo $ccver2 | cut -d . -f1)
+        num2=$(echo $ccver2 | cut -d . -f2)
+        gccnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
 
-    case "$GCCOPTS" in
-    *-mcpu=cortex-m7*)
-        # Cortex-M7 support wasn't added until GCC 5. Since we don't use any
-        # M7-specific features, we can compile as Cortex-M4 when on GCC 4.9.
-        if test "$gccnum" -lt "500"; then
-            GCCOPTS=$(echo "$GCCOPTS" | sed -e "s/-mcpu=cortex-m7/-mcpu=cortex-m4 -mthumb/")
+        # This makes:
+        # 3.3.X  => 303
+        # 3.4.X  => 304
+        # 2.95.3 => 295
+        # 7.3-win32 => 703
+
+        echo "Using $CC $ccver ($gccnum)"
+
+        if test "$gccnum" -ge "400"; then
+            # gcc 4.0 is just *so* much pickier on arguments that differ in signedness
+            # so we ignore that warnings for now
+            # -Wno-pointer-sign
+            GCCOPTS="$GCCOPTS -Wno-pointer-sign"
         fi
-        ;;
-    esac
 
-    case $prefix in
-    "" | "$CROSS_COMPILE")
-        # simulator
-        ;;
-    *)
-        # Verify that the cross-compiler is of a recommended version!
-        if test "$gccver" != "$gccchoice"; then
-            echo "WARNING: Your cross-compiler $CC $gccver is not of the recommended"
-            echo "WARNING: version $gccchoice!"
-            echo "WARNING: This may cause your build to fail since it may be a version"
-            echo "WARNING: that isn't functional or known to not be the best choice."
-            echo "WARNING: If you suffer from build problems, you know that this is"
-            echo "WARNING: a likely source for them..."
+        if test "$gccnum" -ge "402"; then
+            # disable warning about "warning: initialized field overwritten" as gcc 4.2
+            # and later would throw it for several valid cases
+            GCCOPTS="$GCCOPTS -Wno-override-init"
         fi
-        ;;
-    esac
 
+        if test "$gccnum" -ge "700"; then
+            # gcc 7 spews a bunch of warnings by default
+            GCCOPTS="$GCCOPTS -Wimplicit-fallthrough=0"
+        fi
+
+        case "$GCCOPTS" in
+        *-mcpu=cortex-m7*)
+            # Cortex-M7 support wasn't added until GCC 5. Since we don't use any
+            # M7-specific features, we can compile as Cortex-M4 when on GCC 4.9.
+            if test "$gccnum" -lt "500"; then
+                GCCOPTS=$(echo "$GCCOPTS" | sed -e "s/-mcpu=cortex-m7/-mcpu=cortex-m4 -mthumb/")
+            fi
+            ;;
+        esac
+
+        case $prefix in
+        "" | "$CROSS_COMPILE")
+            # simulator
+            ;;
+        *)
+            # Verify that the cross-compiler is of a recommended version!
+            if test "$ccver" != "$gccchoice"; then
+                echo "WARNING: Your cross-compiler $CC $ccver is not of the recommended"
+                echo "WARNING: version $gccchoice!"
+                echo "WARNING: This may cause your build to fail since it may be a version"
+                echo "WARNING: that isn't functional or known to not be the best choice."
+                echo "WARNING: If you suffer from build problems, you know that this is"
+                echo "WARNING: a likely source for them..."
+            fi
+            ;;
+        esac
+    fi
 fi
 
 echo "Using $LD"
@@ -2131,16 +2183,19 @@ fi
 # figure out the full path to the various commands if possible
 HOSTCC=$(findtool gcc --lit)
 HOSTAR=$(findtool ar --lit)
-CC=$(findtool ${CC} --lit)
-CPP=$(findtool ${CPP} --lit)
-LD=$(findtool ${LD} --lit)
-AR=$(findtool ${AR} --lit)
-AS=$(findtool ${AS} --lit)
-OC=$(findtool ${OC} --lit)
-WINDRES=$(findtool ${WINDRES} --lit)
-DLLTOOL=$(findtool ${DLLTOOL} --lit)
-DLLWRAP=$(findtool ${DLLWRAP} --lit)
-RANLIB=$(findtool ${RANLIB} --lit)
+# LLVM tools have arguments (e.g. "clang --target=..."), skip findtool
+if [ "$ARG_LLVM" != "1" ]; then
+    CC=$(findtool ${CC} --lit)
+    CPP=$(findtool ${CPP} --lit)
+    LD=$(findtool ${LD} --lit)
+    AR=$(findtool ${AR} --lit)
+    AS=$(findtool ${AS} --lit)
+    OC=$(findtool ${OC} --lit)
+    WINDRES=$(findtool ${WINDRES} --lit)
+    DLLTOOL=$(findtool ${DLLTOOL} --lit)
+    DLLWRAP=$(findtool ${DLLWRAP} --lit)
+    RANLIB=$(findtool ${RANLIB} --lit)
+fi
 
 # in pure cross-compiler environments without own native compiler this helps:
 HOSTCC=${HOSTCC:-${CC}}
@@ -2153,7 +2208,7 @@ if [ "$app_type" = "sdl-sim" -o "$app_type" = "sdl-app" -o "$app_type" = "checkw
 fi
 
 if [ -z "$arch" ]; then
-    cpp_defines=$(echo "" | $CPP $GCCOPTS -dD)
+    cpp_defines=$(echo "" | $CPP $GCCOPTS -dD -)
     if [ -n "$(echo $cpp_defines | grep -w __m68k__)" ]; then
         arch="m68k"
     elif [ -n "$(echo $cpp_defines | grep -w __arm__)" ]; then
@@ -2161,7 +2216,7 @@ if [ -z "$arch" ]; then
         # cpp defines like "#define __ARM_ARCH 4" (where we want to extract the 4)
         arch_version="$(echo "$cpp_defines" | grep 'define __ARM_ARCH ' | sed -e 's,.* \([0-9]\).*,\1,')"
         arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e 's/.* \([0-9]\{1,\}\)$/\1/')"
-        if test "$gccnum" -ge "800"; then
+        if test "$ARG_LLVM" != "1" && test "$gccnum" -ge "800"; then
             # GCC8+ can natively emit unified asm syntax
             GCCOPTS="$GCCOPTS -masm-syntax-unified"
         fi
@@ -2514,8 +2569,9 @@ export SHARED_CFLAGS=${SHARED_CFLAGS}
 export LDOPTS=${LDOPTS}
 export GLOBAL_LDOPTS=${GLOBAL_LDOPTS}
 export LDMAP_OPT=${LDMAP_OPT}
-export GCCVER=${gccver}
+export GCCVER=${ccver}
 export GCCNUM=${gccnum}
+export LLVM=${ARG_LLVM}
 export UNAME=${uname}
 export MANUALDEV=${manualdev}
 export TTS_OPTS=${TTS_OPTS}
