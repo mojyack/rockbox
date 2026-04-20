@@ -2097,6 +2097,19 @@ else
 
         # Use lld
         GLOBAL_LDOPTS="$GLOBAL_LDOPTS -fuse-ld=lld"
+
+        # Use llvm compiler-rt instead of libgcc
+        if [ -n "$COMPILER_RT" ]; then
+            echo "Using COMPILER_RT from environment: $COMPILER_RT"
+        else
+            COMPILER_RT=$($CC $GCCOPTS --print-libgcc-file-name 2>/dev/null)
+            if [ ! -f "$COMPILER_RT" ]; then
+                echo "WARNING: Clang compiler-rt builtins not found at $COMPILER_RT"
+                echo "WARNING: Install compiler-rt for your target"
+                echo "WARNING: Falling back to empty COMPILER_RT"
+                COMPILER_RT=""
+            fi
+        fi
     else
         # GCC version handling
         # convert gcc version to a number (major*100 + minor).
@@ -2161,6 +2174,11 @@ else
             ;;
         esac
     fi
+fi
+
+# Default to use libgcc
+if [ -z "$COMPILER_RT" ]; then
+    COMPILER_RT="-lgcc"
 fi
 
 echo "Using $LD"
@@ -2557,6 +2575,7 @@ export WINDRES=${WINDRES}
 export DLLTOOL=${DLLTOOL}
 export DLLWRAP=${DLLWRAP}
 export RANLIB=${RANLIB}
+export COMPILER_RT=${COMPILER_RT}
 export PREFIX=${ARG_PREFIX}
 export PROFILE_OPTS=${PROFILE_OPTS}
 export APP_TYPE=${app_type}

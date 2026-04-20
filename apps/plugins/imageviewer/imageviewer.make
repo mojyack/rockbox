@@ -39,7 +39,7 @@ $(IMGVBUILDDIR)/%.ovl: $(IMGDEC_OUTLDS)
 	$(call PRINTS,LD $(@F))$(CC) $(IMGDECFLAGS) -o $(IMGVBUILDDIR)/$*.elf \
 		$(filter-out $(PLUGIN_CRT0),$(filter %.o, $^)) \
 		$(filter %.a, $+) \
-		-lgcc $(IMGDEC_OVLFLAGS)
+		$(COMPILER_RT) $(IMGDEC_OVLFLAGS)
 	$(SILENT)$(call objcopy_plugin,$(IMGVBUILDDIR)/$*.elf,$@)
 
 # rule to create reference map for image decoder
@@ -47,7 +47,7 @@ $(IMGVBUILDDIR)/%.refmap: $(APPSDIR)/plugin.h $(IMGVSRCDIR)/imageviewer.h $(PLUG
 	$(call PRINTS,LD $(@F))$(CC) $(IMGDECFLAGS) -o /dev/null \
 		$(filter %.o, $^) \
 		$(filter %.a, $+) \
-		-lgcc $(IMGDECLDFLAGS)
+		$(COMPILER_RT) $(IMGDECLDFLAGS)
 
 $(IMGVBUILDDIR)/%.link: $(PLUGIN_LDS) $(IMGVBUILDDIR)/%.refmap
 	$(call PRINTS,PP $(@F))$(call preprocess2file,$<,$@,-DPLUGIN -DIMGVDECODER_OFFSET=$(shell \

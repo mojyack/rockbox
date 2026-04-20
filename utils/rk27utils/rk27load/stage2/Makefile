@@ -17,7 +17,7 @@ OBJS	= crt0.o main.o irq.o
 LDSCRIPT= stage2.lds
 
 #LIBDIRS	= -L../arm/lib/gcc/arm-elf/4.1.0/ -L../lib
-#LIBS	= -lgcc
+#LIBS	= $(COMPILER_RT)
 LIBS    =
 LDFLAGS	= -Wundef -marm -march=armv5te -T$(LDSCRIPT) -nostartfiles  \
 	-mfpu=fpa -nostdlib -Xlinker -Map=$(TARGET).map

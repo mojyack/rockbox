@@ -4,7 +4,7 @@ TMP_LDS=$(BUILD_DIR)/link.lds
 TMP_MAP=$(BUILD_DIR)/hwstub.map
 CFLAGS=$(GCCOPTS) $(DEFINES) -W -Wall -Wundef -O -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu99 -fomit-frame-pointer -Wno-pointer-sign -Wno-override-init $(INCLUDES)
 ASFLAGS=$(CFLAGS) -D__ASSEMBLER__
-LDFLAGS=-lgcc -Os -nostdlib -T$(TMP_LDS) -Wl,-Map,$(TMP_MAP) $(INCLUDES) -L$(BUILD_DIR)
+LDFLAGS=$(COMPILER_RT) -Os -nostdlib -T$(TMP_LDS) -Wl,-Map,$(TMP_MAP) $(INCLUDES) -L$(BUILD_DIR)
 
 SRC:=$(shell cat $(ROOT_DIR)/SOURCES | $(CC) $(INCLUDES) \
     $(DEFINES) -E -P -include "config.h" - 2>/dev/null \

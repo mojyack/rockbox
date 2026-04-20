@@ -25,7 +25,7 @@ $(CODECDIR)/wmavoice.codec: $(CODECDIR)/wmavoice.o
 	$(call PRINTS,LD $(@F))$(CC) $(CODECFLAGS) -o $(CODECDIR)/wmavoice.elf \
 	$(filter %.o, $^) \
 	$(filter %.a, $+) \
-	-lgcc -lm $(CODECLDFLAGS)
+	$(COMPILER_RT) -lm $(CODECLDFLAGS)
 	$(SILENT)cp $(CODECDIR)/wmavoice.elf $@
 endif
 

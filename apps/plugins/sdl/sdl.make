@@ -77,7 +77,7 @@ $(SDL_OBJDIR)/duke3d.ovl: $(SDL_OBJ) $(DUKE3D_OBJ) $(TLSFLIB) $(DUKE3D_OUTLDS)
 	$(SILENT)$(CC) $(PLUGINFLAGS) -o $(basename $@).elf \
 		$(filter %.o, $^) \
 		$(filter %.a, $+) \
-		-lgcc -T$(DUKE3D_OUTLDS) $(SDL_OVLFLAGS)
+		$(COMPILER_RT) -T$(DUKE3D_OUTLDS) $(SDL_OVLFLAGS)
 	$(call PRINTS,LD $(@F))$(call objcopy,$(basename $@).elf,$@)
 
 # Wolf3D
@@ -94,7 +94,7 @@ $(SDL_OBJDIR)/wolf3d.ovl: $(SDL_OBJ) $(WOLF3D_OBJ) $(TLSFLIB) $(WOLF3D_OUTLDS)
 	$(SILENT)$(CC) $(PLUGINFLAGS) -o $(basename $@).elf \
 		$(filter %.o, $^) \
 		$(filter %.a, $+) \
-		-lgcc  -T$(WOLF3D_OUTLDS) $(SDL_OVLFLAGS)
+		$(COMPILER_RT)  -T$(WOLF3D_OUTLDS) $(SDL_OVLFLAGS)
 	$(call PRINTS,LD $(@F))$(call objcopy_plugin,$(basename $@).elf,$@)
 
 # Quake
@@ -112,7 +112,7 @@ $(SDL_OBJDIR)/quake.ovl: $(SDL_OBJ) $(QUAKE_OBJ) $(TLSFLIB) $(QUAKE_OUTLDS)
 	$(SILENT)$(CC) $(PLUGINFLAGS) -o $(basename $@).elf \
 		$(filter %.o, $^) \
 		$(filter %.a, $+) \
-		-lgcc -T$(QUAKE_OUTLDS) $(SDL_OVLFLAGS)
+		$(COMPILER_RT) -T$(QUAKE_OUTLDS) $(SDL_OVLFLAGS)
 	$(call PRINTS,LD $(@F))$(call objcopy_plugin,$(basename $@).elf,$@)
 
 ###

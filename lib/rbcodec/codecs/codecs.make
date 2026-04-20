@@ -238,11 +238,11 @@ $(CODECDIR)/%-pre.map: $(CODEC_CRT0) $(CODECLINK_LDS) $(CODECDIR)/%.o $(CODEC_LI
 	$(call PRINTS,LD $(@F))$(CC) $(CODECFLAGS) -o $(CODECDIR)/$*-pre.elf \
 		$(filter %.o, $^) \
 		$(filter-out $(CODECLIB),$(filter %.a, $+)) $(CODECLIB) \
-		-lgcc $(subst .map,-pre.map,$(CODECLDFLAGS))
+		$(COMPILER_RT) $(subst .map,-pre.map,$(CODECLDFLAGS))
 
 $(CODECDIR)/%.codec: $(CODECDIR)/%.o
 	$(call PRINTS,LD $(@F))$(CC) $(CODECFLAGS) -o $(CODECDIR)/$*.elf \
 		$(filter %.o, $^) \
 		$(filter %.a, $+) \
-		-lgcc $(CODECLDFLAGS)
+		$(COMPILER_RT) $(CODECLDFLAGS)
 	$(SILENT)$(call objcopy_plugin,$(CODECDIR)/$*.elf,$@)
