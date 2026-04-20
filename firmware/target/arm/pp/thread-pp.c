@@ -96,8 +96,10 @@ static void __attribute__((naked, noinline, noreturn))
         "b      thread_exit_final    \n"
         : : "i"(IDLE_STACK_WORDS));
 
+#ifndef __clang__
     while (1);
     (void)core; (void)current;
+#endif
 }
 
 /*---------------------------------------------------------------------------
@@ -137,7 +139,9 @@ static void __attribute__((naked, noinline))
         "bl     commit_discard_idcache \n" /* invalidate new core's cache */
         "ldmfd  sp!, { r4-r5, pc }     \n" /* restore remaining context */
         : : "i"(IDLE_STACK_WORDS));
+#ifndef __clang__
     (void)old_core; (void)thread;
+#endif
 }
 
 /** PP-model-specific dual-core code **/

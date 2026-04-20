@@ -39,7 +39,7 @@ static void __attribute__((naked)) USED_ATTR start_thread(void)
         "mov    lr, pc                   \n" /* Call thread function */
         "bx     r4                       \n"
     ); /* No clobber list - new thread doesn't care */
-    thread_exit();
+    asm volatile ("b thread_exit");
 #if 0
     asm volatile (".ltorg"); /* Dump constant pool */
 #endif
