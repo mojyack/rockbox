@@ -1,4 +1,4 @@
-[tools/configure]
+[tools/configure, tools/configure.d/*.sh]
 indent_style = space
 indent_size = 4
 
