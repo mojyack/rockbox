@@ -79,9 +79,11 @@ ifneq ($(MEMORYSIZE),2)
 include $(RBCODECLIB_DIR)/codecs/cRSID/cRSID.make
 endif
 
-ifeq ($(shell expr $(GCCNUM) \> 600),1)
+ifeq ($(LLVM),0)
+ifeq ($(shell expr $(CCNUM) \> 600),1)
 $(MUSEPACKLIB): CODECFLAGS += -Wno-shift-negative-value
 $(WMALIB): CODECFLAGS += -Wno-shift-negative-value
+endif
 endif
 
 ifndef DEBUG

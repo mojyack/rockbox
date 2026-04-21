@@ -292,7 +292,7 @@ mad_fixed_t mad_f_mul_inline(mad_fixed_t x, mad_fixed_t y)
 
 # elif defined(FPM_MIPS)
 
-#if GCCNUM >= 404
+#if !defined(__clang__) && CCNUM >= 404
 typedef unsigned int u64_di_t __attribute__ ((mode (DI))); 
 # define MAD_F_MLX(hi, lo, x, y) \
 do { \
@@ -331,7 +331,7 @@ do { \
 #  define MAD_F_MLZ(hi, lo)  ((mad_fixed_t) (lo))
 # endif
 
-#endif /* GCCNUM */ 
+#endif /* CCNUM */ 
 
 # if defined(OPT_SPEED)
 #  define mad_f_scale64(hi, lo)  \

@@ -25,13 +25,15 @@ else
 DOOMCFLAGS += -O2
 endif
 
-# Set '-fgnu89-inline' if supported (GCCVER >= 4.1.3, GCCNUM > 401)
-ifeq ($(shell expr $(GCCNUM) \> 401),1)
+ifeq ($(LLVM),0)
+# Set '-fgnu89-inline' if supported (LLVM == 0, CCVER >= 4.1.3, CCNUM > 401)
+ifeq ($(shell expr $(CCNUM) \> 401),1)
     DOOMCFLAGS += -fgnu89-inline
 endif
 # Disable stringop-truncation warnings on GCC 8 or greater
-ifeq ($(shell expr $(GCCNUM) \> 800),1)
+ifeq ($(shell expr $(CCNUM) \> 800),1)
     DOOMCFLAGS += -Wno-stringop-truncation
+endif
 endif
 
 ifndef APP_TYPE

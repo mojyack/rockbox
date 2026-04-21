@@ -2080,9 +2080,9 @@ else
         ccver2=$($CC -dumpversion | cut -d "-" -f1)
         num1=$(echo $ccver2 | cut -d . -f1)
         num2=$(echo $ccver2 | cut -d . -f2)
-        clangnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
+        ccnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
 
-        echo "Using $CC $ccver ($clangnum) [LLVM/Clang]"
+        echo "Using $CC $ccver ($ccnum) [LLVM/Clang]"
 
         # Remove GCC-specific flags that Clang does not support
         CCOPTS=$(echo "$CCOPTS" | sed -e 's/-funit-at-a-time//' -e 's/-fno-delete-null-pointer-checks//')
@@ -2119,7 +2119,7 @@ else
         ccver2=$($CC -dumpfullversion -dumpversion | cut -d "-" -f1)
         num1=$(echo $ccver2 | cut -d . -f1)
         num2=$(echo $ccver2 | cut -d . -f2)
-        gccnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
+        ccnum=$( (expr $num1 "*" 100 + $num2) 2>/dev/null)
 
         # This makes:
         # 3.3.X  => 303
@@ -2127,22 +2127,22 @@ else
         # 2.95.3 => 295
         # 7.3-win32 => 703
 
-        echo "Using $CC $ccver ($gccnum)"
+        echo "Using $CC $ccver ($ccnum)"
 
-        if test "$gccnum" -ge "400"; then
+        if test "$ccnum" -ge "400"; then
             # gcc 4.0 is just *so* much pickier on arguments that differ in signedness
             # so we ignore that warnings for now
             # -Wno-pointer-sign
             GCCOPTS="$GCCOPTS -Wno-pointer-sign"
         fi
 
-        if test "$gccnum" -ge "402"; then
+        if test "$ccnum" -ge "402"; then
             # disable warning about "warning: initialized field overwritten" as gcc 4.2
             # and later would throw it for several valid cases
             GCCOPTS="$GCCOPTS -Wno-override-init"
         fi
 
-        if test "$gccnum" -ge "700"; then
+        if test "$ccnum" -ge "700"; then
             # gcc 7 spews a bunch of warnings by default
             GCCOPTS="$GCCOPTS -Wimplicit-fallthrough=0"
         fi
@@ -2151,7 +2151,7 @@ else
         *-mcpu=cortex-m7*)
             # Cortex-M7 support wasn't added until GCC 5. Since we don't use any
             # M7-specific features, we can compile as Cortex-M4 when on GCC 4.9.
-            if test "$gccnum" -lt "500"; then
+            if test "$ccnum" -lt "500"; then
                 GCCOPTS=$(echo "$GCCOPTS" | sed -e "s/-mcpu=cortex-m7/-mcpu=cortex-m4 -mthumb/")
             fi
             ;;
@@ -2234,7 +2234,7 @@ if [ -z "$arch" ]; then
         # cpp defines like "#define __ARM_ARCH 4" (where we want to extract the 4)
         arch_version="$(echo "$cpp_defines" | grep 'define __ARM_ARCH ' | sed -e 's,.* \([0-9]\).*,\1,')"
         arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e 's/.* \([0-9]\{1,\}\)$/\1/')"
-        if test "$ARG_LLVM" != "1" && test "$gccnum" -ge "800"; then
+        if test "$ARG_LLVM" != "1" && test "$ccnum" -ge "800"; then
             # GCC8+ can natively emit unified asm syntax
             GCCOPTS="$GCCOPTS -masm-syntax-unified"
         fi
@@ -2406,7 +2406,7 @@ ${Darch_profile}
 #define ${defendian} 1
 
 /* Define the GCC version used for the build */
-#define GCCNUM ${gccnum}
+#define CCNUM ${ccnum}
 
 /* Define this if you build rockbox to support the logf logging and display */
 ${use_logf}
@@ -2588,8 +2588,8 @@ export SHARED_CFLAGS=${SHARED_CFLAGS}
 export LDOPTS=${LDOPTS}
 export GLOBAL_LDOPTS=${GLOBAL_LDOPTS}
 export LDMAP_OPT=${LDMAP_OPT}
-export GCCVER=${ccver}
-export GCCNUM=${gccnum}
+export CCVER=${ccver}
+export CCNUM=${ccnum}
 export LLVM=${ARG_LLVM}
 export UNAME=${uname}
 export MANUALDEV=${manualdev}

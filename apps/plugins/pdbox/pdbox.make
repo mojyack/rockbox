@@ -26,9 +26,11 @@ ifdef APP_TYPE
 PDBOXLDFLAGS += -lm
 endif
 
+ifeq ($(LLVM),0)
 # Disable stringop-truncation warnings on GCC 8 or greater
-ifeq ($(shell expr $(GCCNUM) \> 800),1)
+ifeq ($(shell expr $(CCNUM) \> 800),1)
     PDBOXFLAGS += -Wno-stringop-truncation
+endif
 endif
 
 
