@@ -18,7 +18,12 @@ DOOM_OBJ := $(call c2obj, $(DOOM_SRC))
 # add source files to OTHER_SRC to get automatic dependencies
 OTHER_SRC += $(DOOM_SRC)
 
-DOOMCFLAGS = $(PLUGINFLAGS) -Wno-strict-prototypes -O2 -fno-strict-aliasing
+DOOMCFLAGS = $(PLUGINFLAGS) -Wno-strict-prototypes -fno-strict-aliasing
+ifeq ($(LLVM),1)
+DOOMCFLAGS += -Oz
+else
+DOOMCFLAGS += -O2
+endif
 
 # Set '-fgnu89-inline' if supported (GCCVER >= 4.1.3, GCCNUM > 401)
 ifeq ($(shell expr $(GCCNUM) \> 401),1)
