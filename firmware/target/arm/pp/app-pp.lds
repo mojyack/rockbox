@@ -6,7 +6,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/pp/crt0-pp.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -17,16 +16,17 @@ STARTUP(target/arm/pp/crt0-pp.o)
 #define IRAMORIG 0x40000000
 #define IRAMSIZE 0xc000
 
-/* End of the audio buffer, where the codec buffer starts */
-#define ENDAUDIOADDR  (DRAMORIG + DRAMSIZE)
-
-/* Where the codec buffer ends, and the plugin buffer starts */
-#define ENDADDR (ENDAUDIOADDR + CODECSIZE)
-
 MEMORY
 {
-    DRAM : ORIGIN = DRAMORIG,     LENGTH = DRAMSIZE
-    IRAM : ORIGIN = IRAMORIG,     LENGTH = IRAMSIZE
+    DRAM :      ORIGIN = DRAMORIG,                            LENGTH = DRAMSIZE
+    CODECBUF :  ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM),         LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
+    IRAM :      ORIGIN = IRAMORIG,                            LENGTH = IRAMSIZE
+#if NOCACHE_BASE != 0
+    NCRAM :     ORIGIN = ORIGIN(DRAM) + NOCACHE_BASE,         LENGTH = DRAMSIZE
+#endif
+   /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(PLUGINBUF) + LENGTH(PLUGINBUF), LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -62,12 +62,19 @@ SECTIONS
     /* .ncdata section is placed at uncached physical alias address and is
      * loaded at the proper cached virtual address - no copying is
      * performed in the init code */
-    .ncdata . + NOCACHE_BASE :
+    .ncdata ALIGN(ADDR(.data) + SIZEOF(.data) + NOCACHE_BASE, CACHEALIGN_SIZE) :
+        AT(ALIGN(ADDR(.data) + SIZEOF(.data), CACHEALIGN_SIZE))
     {
         . = ALIGN(CACHEALIGN_SIZE);
         *(.ncdata*)
         . = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > NCRAM
+
+    /* See .ncdata_vma of plugin.lds */
+    .ncdata_vma (NOLOAD) : ALIGN(CACHEALIGN_SIZE)
+    {
+        . += SIZEOF(.ncdata);
+    } > DRAM AT> NOLOAD_LMA
 #endif
     
     /DISCARD/ :
@@ -75,24 +82,32 @@ SECTIONS
         *(.eh_frame)
     }
 
-    .vectors 0x0 :
+    /*
+     * Originally ".vectors{...} > DRAM" however lld is strict about
+     * VMA overlapping with ".bss".
+     * Therefore, it was necessary to move the VMA of .vectors to
+     * somewhere else that didn't overlap (e.g. NOLOAD_LMA).
+     * Since ".vectors" is only accessed via "_vectors{start,end,copy}",
+     * it doesn't matter what the VMA is set to.
+     * */
+    .vectors :
     {
-        _vectorsstart = .;
         KEEP(*(.vectors));
-        _vectorsend = .;
-    } AT> DRAM
+    } > NOLOAD_LMA AT> DRAM
 
+    _vectorsstart = 0;
+    _vectorsend = SIZEOF(.vectors);
     _vectorscopy = LOADADDR(.vectors);
-    _noloaddram  = LOADADDR(.vectors);
+    _noloaddram = LOADADDR(.vectors);
 
-    .ibss IRAMORIG (NOLOAD) :
+    .ibss (NOLOAD) :
     {
         _iedata = .;
         *(.qharray)
         *(.ibss*)
         . = ALIGN(0x4);
         _iend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .iram _iend :
     {
@@ -107,13 +122,13 @@ SECTIONS
     _iramcopy = LOADADDR(.iram);
 
 
-    .init ENDAUDIOADDR : 
+    .init :
     {
         . = ALIGN(4);
         _initstart = .;
         *(.init*)
         _initend = .;
-    } AT> DRAM
+    } > CODECBUF AT> DRAM
 
     _initcopy = LOADADDR(.init);
 
@@ -129,7 +144,7 @@ SECTIONS
        cop_idlestackbegin = .;
        . += IDLE_STACK_SIZE;
        cop_idlestackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .stack (NOLOAD) :
     {
@@ -137,7 +152,7 @@ SECTIONS
        stackbegin = .;
        . += 0x2000;
        stackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
     
     /* .bss and .ncbss are treated as a single section to use one init loop to
      * zero it - note "_edata" and "_end" */
@@ -147,49 +162,31 @@ SECTIONS
         *(.bss*)
         *(COMMON)
         . = ALIGN(0x4);
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
 #if NOCACHE_BASE != 0
-    .ncbss . + NOCACHE_BASE (NOLOAD):
+    .ncbss ALIGN(ADDR(.bss) + SIZEOF(.bss) + NOCACHE_BASE, CACHEALIGN_SIZE) (NOLOAD):
     {
     	. = ALIGN(CACHEALIGN_SIZE);
         *(.ncbss*)
     	. = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > NCRAM AT> NOLOAD_LMA
+
+    /* same as .ncdata_vma */
+    .ncbss_vma (NOLOAD) : ALIGN(CACHEALIGN_SIZE)
+    {
+        . += SIZEOF(.ncbss);
+    } > DRAM AT> NOLOAD_LMA
 #endif
 
-    /* This will be aligned by preceding alignments */
-    .endaddr . - NOCACHE_BASE (NOLOAD) :
-    {
-        _end = .;
-    } > DRAM
+    _end = .;
 
-    .audiobuf _end (NOLOAD) :
-    {
-        _audiobuffer = .;
-        . = ALIGN(0x4);
-        audiobuffer = .;
-    } > DRAM
-    
-    .audiobufend ENDAUDIOADDR (NOLOAD) :
-    {
+    audiobuffer = ALIGN(_end, 0x4);
 #ifdef IPOD_VIDEO
-        audiobufend_lds = .;
+    audiobufend_lds = ORIGIN(CODECBUF);
 #else
-        audiobufend = .;
+    audiobufend = ORIGIN(CODECBUF);
 #endif
-        _audiobufend = .;
-    } > DRAM
-
-    .codec ENDAUDIOADDR (NOLOAD) :
-    {
-        codecbuf = .;
-        _codecbuf = .;
-    }
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 }

@@ -3,7 +3,6 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/pp/crt0-pp-bl.o)
 
 #define DRAMSIZE (MEMORYSIZE * 0x100000)
 
@@ -41,6 +40,8 @@ MEMORY
 {
     DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
     IRAM : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = DRAMORIG + DRAMSIZE, LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -75,18 +76,16 @@ SECTIONS
      . += 0x2000;
      _stackend = .;
      stackend = .;
-  } > IRAM
+  } > IRAM AT> NOLOAD_LMA
 
   /* The bss section is too large for IRAM - we just move it 16MB into the
      DRAM */
-
-  . = DRAMORIG;
-  .bss . + (16*1024*1024) (NOLOAD) : {
+  .bss DRAMORIG + (16*1024*1024) (NOLOAD) : {
      _edata = .;
      *(.bss*);
      *(.ibss);
      *(COMMON)
      *(.ncbss*);
      _end = .;
-  } > DRAM
+  } > DRAM AT> NOLOAD_LMA
 }
