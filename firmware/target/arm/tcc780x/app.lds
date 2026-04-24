@@ -4,7 +4,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/tcc780x/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -20,19 +19,17 @@ STARTUP(target/arm/tcc780x/crt0.o)
 #define SRAMORIG 0x10000000
 #define SRAMSIZE 0xc000
 
-/* End of the audio buffer, where the codec buffer starts */
-#define ENDAUDIOADDR  (DRAMORIG + DRAMSIZE)
-
-/* Where the codec buffer ends, and the plugin buffer starts */
-#define ENDADDR (ENDAUDIOADDR + CODECSIZE)
-
 MEMORY
 {
     DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
+    CODECBUF : ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM), LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
     /* Seperate data & instruction TCMs plus SRAM. */
     ITCM : ORIGIN = ITCMORIG, LENGTH = ITCMSIZE
     DTCM : ORIGIN = DTCMORIG, LENGTH = DTCMSIZE
     SRAM : ORIGIN = SRAMORIG, LENGTH = SRAMSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(PLUGINBUF) + LENGTH(PLUGINBUF), LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -109,7 +106,7 @@ SECTIONS
         *(.ibss*)
         . = ALIGN(0x4);
         _iend = .;
-    } > SRAM
+    } > SRAM AT> NOLOAD_LMA
 
     .stack :
     {
@@ -128,27 +125,8 @@ SECTIONS
        _end = .;
     } > DRAM
 
-    .audiobuf ALIGN(4) :
-    {
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
-
-    .audiobufend ENDAUDIOADDR:
-    {
-        audiobufend = .;
-        _audiobufend = .;
-    } > DRAM
-
-    .codec ENDAUDIOADDR:
-    {
-        codecbuf = .;
-        _codecbuf = .;
-    }
-
-    .plugin ENDADDR:
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ORIGIN(CODECBUF);
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 }
