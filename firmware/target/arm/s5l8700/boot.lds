@@ -1,3 +1,4 @@
+#define __ASSEMBLER__
 #include "config.h"
 
 ENTRY(start)
@@ -7,7 +8,6 @@ OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_FORMAT(elf32-bigarm)
 #endif
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/s5l8700/crt0.o)
 
 #ifdef IPOD_NANO2G
 #define DRAMORIG 0x08000000 + ((MEMORYSIZE - 1) * 0x100000)
@@ -35,6 +35,8 @@ MEMORY
     DRAM  : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
     IRAM  : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
     FLASH : ORIGIN = FLASHORIG, LENGTH = FLASHSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = DRAMORIG + DRAMSIZE, LENGTH = 0x10000000
 }
 
 #if defined(IPOD_NANO2G)
@@ -95,7 +97,7 @@ SECTIONS
      _fiqstackbegin = .;
      . += 0x400;
      _fiqstackend = .;
-  } > IRAM
+  } > IRAM AT> NOLOAD_LMA
 
   /* The bss section is too large for IRAM on the Nano 2G, thanks to the FTL.
      We just move it 31MB into the DRAM */
@@ -108,8 +110,8 @@ SECTIONS
     . = ALIGN(0x4);
      _end = .;
 #ifdef IPOD_NANO2G
-  } > DRAM
+  } > DRAM AT> NOLOAD_LMA
 #else
-  } > IRAM
+  } > IRAM AT> NOLOAD_LMA
 #endif
 }

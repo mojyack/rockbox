@@ -1,3 +1,4 @@
+#define __ASSEMBLER__
 #include "config.h"
 #include "cpu.h"
 
@@ -5,7 +6,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/s5l8700/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -13,26 +13,23 @@ STARTUP(target/arm/s5l8700/crt0.o)
 #define IRAMORIG 0x0
 #define DRAMORIG 0x08000000
 
-/* End of the audio buffer, where the codec buffer starts */
-#define ENDAUDIOADDR  (DRAMORIG + DRAMSIZE)
-
 #define DRAM_SIZE (MEMORYSIZE * 0x100000)
 
 #define DRAMSIZE (DRAM_SIZE - PLUGINSIZE - CODECSIZE)
-#define CODECORIG (ENDAUDIOADDR)
 #if CONFIG_CPU==S5L8700
 #define IRAMSIZE (48*1024)  /* 256KB total - 48KB for core, 208KB for plugins */
 #else /* S5L8701 */
 #define IRAMSIZE (48*1024)  /* 176KB total - 48KB for core, 128KB for plugins */
 #endif
 
-/* Where the codec buffer ends, and the plugin buffer starts */
-#define ENDADDR (ENDAUDIOADDR + CODECSIZE)
-
 MEMORY
 {
-    IRAM : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
-    DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
+    IRAM :      ORIGIN = IRAMORIG,                            LENGTH = IRAMSIZE
+    DRAM :      ORIGIN = DRAMORIG,                            LENGTH = DRAMSIZE
+    CODECBUF :  ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM),         LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(PLUGINBUF) + LENGTH(PLUGINBUF), LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -92,7 +89,7 @@ SECTIONS
         *(.ibss*)
         . = ALIGN(0x4);
         _iend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .stack (NOLOAD) :
     {
@@ -108,7 +105,7 @@ SECTIONS
        _fiqstackbegin = .;
        . += 0x400;
        _fiqstackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .bss (NOLOAD) :
     {
@@ -117,30 +114,10 @@ SECTIONS
         *(COMMON)
         . = ALIGN(0x4);
        _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
-    .audiobuf (NOLOAD) :
-    {
-        . = ALIGN(4);
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
-
-    .audiobufend ENDAUDIOADDR (NOLOAD) :
-    {
-        audiobufend = .;
-        _audiobufend = .;
-    } > DRAM
-
-    .codec CODECORIG (NOLOAD) :
-    {
-        codecbuf = .;
-        _codecbuf = .;
-    } > DRAM
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ORIGIN(CODECBUF);
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 }
