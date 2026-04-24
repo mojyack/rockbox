@@ -21,7 +21,8 @@ from sys        import argv, stderr, stdout
 from subprocess import Popen, PIPE
 from os         import execv
 
-args = argv[1:] # remove script path
+llvm = argv[1]
+args = argv[2:] # remove script path
 
 for opt in ['-E', '-MM', '-v', '--version']:
     if opt in args:
@@ -31,7 +32,9 @@ if '-o' in args and args.index('-o') < len(args) - 1:
     if len(args[args.index('-o') + 1].rsplit('.o', 1)) == 1:
         execv(args[0], args) # output doesn't end in .o
 
-args.append('-mthumb-interwork') # thumb-interwork is required
+if llvm != "1":
+    # thumb-interwork is required for gcc
+    args.append('-mthumb-interwork')
 gcc = Popen(args + ['-mthumb'], stdout=PIPE, stderr=PIPE)
 (out, err) = gcc.communicate()
 
