@@ -4,7 +4,6 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/crt0.o)
 
 #define LOAD_SIZE 0x100000  /* Reserve 1MB for loading the firmware */
 

@@ -5,7 +5,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -45,6 +44,10 @@ MEMORY
 #endif
     IRAM : ORIGIN = IRAM_ORIG, LENGTH = IRAMSIZE
     DRAM : ORIGIN = DRAM_ORIG, LENGTH = DRAMSIZE
+    CODECBUF :   ORIGIN = CODECORIG,                          LENGTH = CODECSIZE
+    PLUGINBUF :  ORIGIN = ENDADDR,                            LENGTH = PLUGINSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(PLUGINBUF) + LENGTH(PLUGINBUF), LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -103,15 +106,15 @@ SECTIONS
         *(.ibss*)
         . = ALIGN(0x4);
         _iend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
-    .init CODECORIG :
+    .init :
     {
         . = ALIGN(4);
         _initstart = .;
         *(.init*)
         _initend = .;
-    } AT> DRAM
+    } > CODECBUF AT> DRAM
 
     _initcopy = LOADADDR(.init);
 
@@ -121,7 +124,7 @@ SECTIONS
        stackbegin = .;
        . += 0x2000;
        stackend = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     .bss (NOLOAD) :
     {
@@ -130,34 +133,10 @@ SECTIONS
         *(COMMON)
         . = ALIGN(0x4);
        _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
-    .audiobuf (NOLOAD) :
-    {
-        . = ALIGN(4);
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
-
-    .audiobufend ENDAUDIOADDR (NOLOAD) :
-    {
-        audiobufend = .;
-        _audiobufend = .;
-    } > DRAM
-
-    .codec CODECORIG (NOLOAD) :
-    {
-        codecbuf = .;
-        _codecbuf = .;
-#if CODEC_BUFFER_FILLS_IRAM
-    } > CODEC_IRAM
-#else
-    } > DRAM
-#endif
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ENDAUDIOADDR;
+    codecbuf = CODECORIG;
+    pluginbuf = ORIGIN(PLUGINBUF);
 }
