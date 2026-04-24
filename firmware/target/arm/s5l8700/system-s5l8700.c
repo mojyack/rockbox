@@ -137,24 +137,26 @@ static void UIRQ(void)
     panicf("Unhandled IRQ %02X: %s", offset, irqname[offset]);
 }
 
-void irq_handler(void)
+static void __attribute__((used)) irq_handler_body(void)
 {
-    /*
-     * Based on: linux/arch/arm/kernel/entry-armv.S and system-meg-fx.c
-     */
-
-    asm volatile(   "stmfd sp!, {r0-r7, ip, lr} \n"   /* Store context */
-                    "sub   sp, sp, #8           \n"); /* Reserve stack */
-
     int irq_no = INTOFFSET;
-    
+
     irqvector[irq_no]();
 
     /* clear interrupt */
     SRCPND = (1 << irq_no);
     INTPND = INTPND;
-    
-    asm volatile(   "add   sp, sp, #8           \n"   /* Cleanup stack   */
+}
+
+void irq_handler(void)
+{
+    /*
+     * Based on: linux/arch/arm/kernel/entry-armv.S and system-meg-fx.c
+     */
+    asm volatile(   "stmfd sp!, {r0-r7, ip, lr} \n"   /* Store context */
+                    "sub   sp, sp, #8           \n"   /* Reserve stack */
+                    "bl    irq_handler_body     \n"
+                    "add   sp, sp, #8           \n"   /* Cleanup stack   */
                     "ldmfd sp!, {r0-r7, ip, lr} \n"   /* Restore context */
                     "subs  pc, lr, #4           \n"); /* Return from IRQ */
 }
