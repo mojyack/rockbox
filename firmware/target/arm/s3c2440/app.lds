@@ -4,7 +4,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/s3c2440/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -23,6 +22,8 @@ STARTUP(target/arm/s3c2440/crt0.o)
 MEMORY
 {
     DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
+    CODECBUF : ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM), LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
 }
 
 SECTIONS
@@ -91,28 +92,8 @@ SECTIONS
        _end = .;
     } > DRAM
 
-    .audiobuf (NOLOAD) :
-    {
-    	. = ALIGN(4);
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
-
-    .audiobufend ENDAUDIOADDR (NOLOAD) :
-    {
-        audiobufend = .;
-        _audiobufend = .;
-    } > DRAM
-
-    .codec ENDAUDIOADDR  (NOLOAD) :
-    {
-        codecbuf = .;
-        _codecbuf = .;
-    }
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ORIGIN(CODECBUF);
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 }
