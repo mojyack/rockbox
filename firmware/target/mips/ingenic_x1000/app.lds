@@ -1,12 +1,16 @@
 #include "config.h"
 #include "cpu.h"
 
+#if defined(__clang__)
+OUTPUT_FORMAT("elf32-tradlittlemips")
+#else
 OUTPUT_FORMAT("elf32-littlemips")
+#endif
 OUTPUT_ARCH(MIPS)
 ENTRY(_start)
-STARTUP(target/mips/ingenic_x1000/crt0.o)
-INPUT(target/mips/exception-mips.o)
-INPUT(target/mips/system-mips.o)
+
+/* Pull exception-mips.o */
+EXTERN(mips_exception_vectors)
 
 #ifdef BOOTLOADER
 # undef PLUGIN_BUFFER_SIZE
@@ -35,6 +39,8 @@ MEMORY
     DRAM : ORIGIN = X1000_DRAM_BASE, LENGTH = X1000_DRAM_SIZE
     TCSM : ORIGIN = X1000_TCSM_BASE, LENGTH = X1000_TCSM_SIZE
     INIT : ORIGIN = INIT_BASE, LENGTH = INIT_SIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = X1000_DRAM_BASE + X1000_DRAM_SIZE, LENGTH = X1000_DRAM_SIZE
 }
 
 SECTIONS
@@ -76,13 +82,13 @@ SECTIONS
     .iram :
     {
         _iramstart = ALIGN(4);
-        . = 0x000; /* TLB refill */
+        . = ORIGIN(IRAM) + 0x000; /* TLB refill */
         KEEP(*(.vectors.1));
-        . = 0x100; /* Cache error */
+        . = ORIGIN(IRAM) + 0x100; /* Cache error */
         KEEP(*(.vectors.2));
-        . = 0x180; /* General exception */
+        . = ORIGIN(IRAM) + 0x180; /* General exception */
         KEEP(*(.vectors.3));
-        . = 0x200; /* Interrupt */
+        . = ORIGIN(IRAM) + 0x200; /* Interrupt */
         KEEP(*(.vectors.4));
         KEEP(*(.vectors));
 
@@ -123,7 +129,7 @@ SECTIONS
          _irqstackbegin = ALIGN(4);
          . += X1000_IRQSTACKSIZE;
          _irqstackend = ALIGN(4);
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .bss _noloaddram (NOLOAD) :
     {
@@ -134,7 +140,7 @@ SECTIONS
         *(.scommon*);
         _bssend = ALIGN(4);
         _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     .audiobuf :
     {
@@ -151,6 +157,9 @@ SECTIONS
         *(.MIPS.abiflags);
         *(.eh_frame);
         *(.rel.dyn);
+        *(.got);
+        *(.got.plt);
+        *(.reginfo);
     }
 }
 

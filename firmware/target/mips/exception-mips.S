@@ -21,6 +21,9 @@
 
 #include "mips.h"
 
+    .globl mips_exception_vectors
+mips_exception_vectors:
+
     .text
     .set push
     .set mips32

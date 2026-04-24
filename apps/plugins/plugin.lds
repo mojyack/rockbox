@@ -9,7 +9,11 @@ OUTPUT_FORMAT(elf32-m68k)
 #elif defined(CPU_ARM)
 OUTPUT_FORMAT(elf32-littlearm)
 #elif defined(CPU_MIPS)
+#if defined(__clang__)
+OUTPUT_FORMAT(elf32-tradlittlemips)
+#else
 OUTPUT_FORMAT(elf32-littlemips)
+#endif
 #else
 /* We can have an #error here we don't use this file when build sims! */
 #error Unknown CPU architecture
@@ -244,6 +248,7 @@ SECTIONS
 #endif
 #ifdef CPU_MIPS
         *(.MIPS.abiflags)
+        *(.reginfo)
         *(.rel.dyn)
 #endif
     }

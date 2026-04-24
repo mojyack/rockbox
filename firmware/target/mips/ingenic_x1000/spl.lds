@@ -1,14 +1,20 @@
 #include "config.h"
 #include "cpu.h"
 
+#if defined(__clang__)
+OUTPUT_FORMAT("elf32-tradlittlemips")
+#else
 OUTPUT_FORMAT("elf32-littlemips")
+#endif
 OUTPUT_ARCH(MIPS)
 ENTRY(_spl_start)
-STARTUP(target/mips/ingenic_x1000/spl-start.o)
 
 MEMORY {
     TCSM : ORIGIN = X1000_SPL_EXEC_ADDR,
            LENGTH = X1000_SPL_SIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = X1000_DRAM_BASE + X1000_DRAM_SIZE,
+                 LENGTH = X1000_DRAM_SIZE
 }
 
 SECTIONS
@@ -43,12 +49,13 @@ SECTIONS
         *(COMMON);
         *(.scommon*);
         _bssend = .;
-    } > TCSM
+    } > TCSM AT> NOLOAD_LMA
 
     /DISCARD/ :
     {
         *(.MIPS.abiflags);
         *(.eh_frame);
         *(.rel.dyn);
+        *(.reginfo);
     }
 }
