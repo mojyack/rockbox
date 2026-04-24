@@ -10,7 +10,6 @@ OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_FORMAT(elf32-bigarm)
 #endif
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/s5l8702/crt0.o)
 
 #define MAX_LOADSIZE 8M  /* reserved for loading Rockbox binary */
 
@@ -31,6 +30,10 @@ MEMORY
     /* DRAM region for BSS */
     BSS_AREA  : ORIGIN = DRAM_ORIG + MAX_LOADSIZE,
                 LENGTH = DRAM_SIZE - MAX_LOADSIZE - TTB_SIZE
+
+    /* IRAM0 region for stacks (past the VECT_AREA) */
+    STACK_AREA : ORIGIN = IRAM0_ORIG + 1K,
+                 LENGTH = IRAM0_SIZE - 1K
 }
 #define LOAD_AREA   MOVE_AREA
 #else
@@ -91,7 +94,7 @@ SECTIONS
      _fiqstackbegin = .;
      . += 0x400;
      _fiqstackend = .;
-  } > LOAD_AREA
+  } > STACK_AREA
 
   .bss (NOLOAD) : {
      _edata = .;
