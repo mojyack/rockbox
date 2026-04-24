@@ -5,7 +5,6 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/pp/crt0-pp502x-bl-usb.o)
 
 #define DRAMORIG        0x01000000 /* Load at 16 MB */
 #define DRAMSIZE        0x00100000 /* 1MB for bootloader */
@@ -21,12 +20,16 @@ MEMORY
 {
     DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
     IRAM : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
+#if NOCACHE_BASE != 0
+    NCRAM : ORIGIN = ORIGIN(DRAM) + NOCACHE_BASE, LENGTH = DRAMSIZE
+#endif
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = DRAMORIG + DRAMSIZE + 0x10000000, LENGTH = 0x10000000
 }
 
 SECTIONS
 {
-    . = DRAMORIG;
-    _loadaddress = . + NOCACHE_BASE;
+    _loadaddress = DRAMORIG + NOCACHE_BASE;
 
     .text :
     {
@@ -49,31 +52,40 @@ SECTIONS
         . = ALIGN(0x4);
     } > DRAM
 
+#if NOCACHE_BASE != 0
     /* .ncdata section is placed at uncached physical alias address and is
      * loaded at the proper cached virtual address - no copying is
      * performed in the init code */
-    .ncdata . + NOCACHE_BASE :
+    .ncdata ALIGN(ADDR(.data) + SIZEOF(.data) + NOCACHE_BASE, CACHEALIGN_SIZE) :
+        AT(ALIGN(ADDR(.data) + SIZEOF(.data), CACHEALIGN_SIZE))
     {
         . = ALIGN(CACHEALIGN_SIZE);
         *(.ncdata*)
         . = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > NCRAM
 
-    /DISCARD/ . - NOCACHE_BASE :
+    /* See .ncdata_vma of plugin.lds */
+    .ncdata_vma (NOLOAD) : ALIGN(CACHEALIGN_SIZE)
+    {
+        . += SIZEOF(.ncdata);
+    } > DRAM AT> NOLOAD_LMA
+#endif
+
+    /DISCARD/ :
     {
         *(.eh_frame)
-    } > DRAM
+    }
 
-    _noloaddram  = .;
+    _noloaddram = .;
 
-    .ibss IRAMORIG (NOLOAD) :
+    .ibss (NOLOAD) :
     {
         _iedata = .;
         *(.qharray)
         *(.ibss*)
         . = ALIGN(0x4);
         _iend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .iram _iend :
     {
@@ -86,10 +98,7 @@ SECTIONS
 
     _iramcopy = LOADADDR(.iram);
 
-    .loadaddressend :
-    {
-        _loadaddressend = . + NOCACHE_BASE;
-    } AT> DRAM
+    _loadaddressend = LOADADDR(.iram) + SIZEOF(.iram) + NOCACHE_BASE;
 
     .stack (NOLOAD) :
     {
@@ -98,7 +107,7 @@ SECTIONS
         stackbegin = .;
         . += 0x2000;
         stackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     /* .bss and .ncbss are treated as a single section to use one init loop
      * to zero them - note "_edata" and "_end" */
@@ -107,27 +116,27 @@ SECTIONS
         _edata = .;
         *(.bss*)
         *(COMMON)
-    } > DRAM
+        . = ALIGN(0x4);
+    } > DRAM AT> NOLOAD_LMA
 
-    .ncbss . + NOCACHE_BASE (NOLOAD) :
+#if NOCACHE_BASE != 0
+    .ncbss ALIGN(ADDR(.bss) + SIZEOF(.bss) + NOCACHE_BASE, CACHEALIGN_SIZE) (NOLOAD):
     {
         . = ALIGN(CACHEALIGN_SIZE);
         *(.ncbss*)
         . = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > NCRAM AT> NOLOAD_LMA
 
-    /* This will be aligned by preceding alignments */
-    .endaddr . - NOCACHE_BASE (NOLOAD) :
+    /* same as .ncdata_vma */
+    .ncbss_vma (NOLOAD) : ALIGN(CACHEALIGN_SIZE)
     {
-        _end = .;
-    } > DRAM
+        . += SIZEOF(.ncbss);
+    } > DRAM AT> NOLOAD_LMA
+#endif
+
+    _end = .;
 
     /* Reference to all DRAM after loaded bootloader image */
-    .freebuffer _end (NOLOAD) :
-    {
-        . = ALIGN(4);
-        freebuffer = .;
-        . = MEMEND-1;
-        freebufferend = .;
-    }
+    freebuffer = ALIGN(_end, 4);
+    freebufferend = MEMEND - 1;
 }
