@@ -4,7 +4,6 @@ ENTRY(start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/imx31/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -20,21 +19,17 @@ STARTUP(target/arm/imx31/crt0.o)
 #define IRAM     DRAM
 #define IRAMSIZE IRAM_SIZE
 
-/* End of the audio buffer, where the codec buffer starts */
-#define ENDAUDIOADDR  (DRAMORIG + DRAMSIZE)
-
-/* Where the codec buffer ends, and the plugin buffer starts */
-#define ENDADDR (ENDAUDIOADDR + CODECSIZE)
-
 /* INIT section is the codec buffer */
 #define INITSIZE  CODECSIZE
-#define INITSTART ENDAUDIOADDR
 
 MEMORY
 {
-    DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
-    INIT : ORIGIN = INITSTART, LENGTH = INITSIZE
-    QHARRAY : ORIGIN = QHARRAY_PHYS_ADDR, LENGTH = QHARRAY_SIZE
+    DRAM :      ORIGIN = DRAMORIG,                            LENGTH = DRAMSIZE
+    CODECBUF :  ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM),         LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
+    QHARRAY :   ORIGIN = QHARRAY_PHYS_ADDR,                   LENGTH = QHARRAY_SIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(QHARRAY) + LENGTH(QHARRAY),  LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -82,26 +77,27 @@ SECTIONS
         *(.eh_frame)
     }
 
-    /* NOLOAD sections at end start here. Any part of the binary image past
-     * this point is discarded or copied elsewhere. */
-    _noloaddram = .;
-
-    .vectors 0x0 :
+    /*
+     * See .vectors of app-pp.lds for the rationale on placing .vectors
+     * in NOLOAD_LMA.
+     */
+    .vectors :
     {
-        _vectorsstart = .;
         KEEP(*(.vectors))
-        _vectorsend = .;
-    } AT> DRAM
+    } > NOLOAD_LMA AT> DRAM
 
+    _vectorsstart = 0;
+    _vectorsend = SIZEOF(.vectors);
     _vectorscopy = LOADADDR(.vectors);
-    
+    _noloaddram = LOADADDR(.vectors);
+
     .init :
     {
         . = ALIGN(4);
         _initstart = .;
         *(.init*)
         _initend = .;
-    } > INIT AT> DRAM
+    } > CODECBUF AT> DRAM
 
     _initcopy = LOADADDR(.init);
 
@@ -112,8 +108,10 @@ SECTIONS
         stackbegin = .;
         . += 0x2000;
         stackend = .;
-    } > DRAM
-    
+    } > DRAM AT> NOLOAD_LMA
+
+    /* .bss and .ncbss are treated as a single section to use one init loop
+     * to zero them */
     .bss (NOLOAD) :
     {
         _edata = .;
@@ -121,49 +119,27 @@ SECTIONS
         *(.ibss*)
         *(COMMON)
         . = ALIGN(0x4);
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
-    .ncbss . + NOCACHE_BASE (NOLOAD) :
+    .ncbss (NOLOAD) :
     {
         . = ALIGN(CACHEALIGN_SIZE); /* >= Cache line boundary */
         *(.ncbss*)
         . = ALIGN(CACHEALIGN_SIZE); /* >= Cache line boundary */
-    } AT> DRAM
-    
-    .endaddr . - NOCACHE_BASE (NOLOAD) :
-    {
-        _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
-    .audiobuf _end (NOLOAD) :
-    {
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
+    _end = .;
 
-    .audiobufend ENDAUDIOADDR (NOLOAD) :
-    {
-        audiobufend = .;
-        _audiobufend = .;
-    } > DRAM
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ORIGIN(CODECBUF);
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 
-    .codec ENDAUDIOADDR (NOLOAD) :
-    {
-        codecbuf = .;
-        _codecbuf = .;
-    }
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    }
-    
     .qharray (NOLOAD) :
     {
-	_qharray = .;
-	*(.qharray)
-	_qharrayend = .;
-    } > QHARRAY
+        _qharray = .;
+        *(.qharray)
+        _qharrayend = .;
+    } > QHARRAY AT> NOLOAD_LMA
 }
 
