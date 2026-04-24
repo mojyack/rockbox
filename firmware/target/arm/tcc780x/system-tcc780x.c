@@ -122,23 +122,25 @@ static void UIRQ(void)
     panicf("Unhandled IRQ %02X: %s", offset, irqname[offset]);
 }
 
+static void __attribute__((used)) irq_handler_body(void)
+{
+    int irq_no = VNIRQ;   /* Read clears the corresponding IRQ status */
+
+    if ((irq_no & (1<<31)) == 0)  /* Ensure invalid flag is not set */
+    {
+        irqvector[irq_no]();
+    }
+}
+
 void irq_handler(void)
 {
     /*
      * Based on: linux/arch/arm/kernel/entry-armv.S and system-meg-fx.c
      */
-
     asm volatile(   "stmfd sp!, {r0-r7, ip, lr} \n"   /* Store context */
-                    "sub   sp, sp, #8           \n"); /* Reserve stack */
-
-    int irq_no = VNIRQ;   /* Read clears the corresponding IRQ status */
-    
-    if ((irq_no & (1<<31)) == 0)  /* Ensure invalid flag is not set */
-    {
-        irqvector[irq_no]();
-    }
-    
-    asm volatile(   "add   sp, sp, #8           \n"   /* Cleanup stack   */
+                    "sub   sp, sp, #8           \n"   /* Reserve stack */
+                    "bl    irq_handler_body     \n"
+                    "add   sp, sp, #8           \n"   /* Cleanup stack   */
                     "ldmfd sp!, {r0-r7, ip, lr} \n"   /* Restore context */
                     "subs  pc, lr, #4           \n"); /* Return from IRQ */
 }
