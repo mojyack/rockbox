@@ -6,7 +6,6 @@ ENTRY(_vectors)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/tms320dm320/crt0.o)
 
 /* Bootloader only uses/knows about the upper 32 M */
 #define DRAMSIZE    (MEMORYSIZE * 0x100000 / 2)

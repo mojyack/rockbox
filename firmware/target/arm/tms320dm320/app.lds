@@ -6,7 +6,6 @@ ENTRY(_start)
 
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/tms320dm320/crt0.o)
 
 #define DRAMSIZE        (MEMORYSIZE * 0x100000)
 #define DRAMORIG        CONFIG_SDRAM_START
