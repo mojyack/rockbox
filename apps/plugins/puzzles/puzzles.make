@@ -24,6 +24,14 @@ PUZZLES_OBJ = $(call c2obj, $(PUZZLES_SRC))
 
 PUZZLES_ROCKS = $(addprefix $(PUZZLES_OBJDIR)/sgt-, $(notdir $(PUZZLES_GAMES_SRC:.c=.rock)))
 
+# These puzzles overflow c200v2's PLUGIN_RAM when built with clang
+ifeq ($(MODELNAME)/$(LLVM), sansac200v2/1)
+PUZZLES_LLVM_SKIP = sgt-bridges sgt-dominosa sgt-galaxies sgt-keen sgt-map \
+                    sgt-mines sgt-net sgt-rect sgt-signpost sgt-towers \
+                    sgt-tracks sgt-undead sgt-unequal
+PUZZLES_ROCKS := $(filter-out $(addsuffix .rock, $(addprefix %/, $(PUZZLES_LLVM_SKIP))), $(PUZZLES_ROCKS))
+endif
+
 OTHER_SRC += $(PUZZLES_SRC)
 OTHER_INC += -I$(PUZZLES_SRCDIR)/src -I $(PUZZLES_SRCDIR)
 
