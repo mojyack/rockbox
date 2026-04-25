@@ -4,7 +4,6 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/imx233/crt0.o)
 
 /* Leave a hole at the beginning of the RAM to load the firmware */
 #define RAM_HOLE    1024 * 1024
@@ -18,19 +17,25 @@ MEMORY
     IRAM : ORIGIN = IRAM_ORIG, LENGTH = IRAM_SIZE
     DRAM : ORIGIN = CACHED_DRAM_ADDR + RAM_HOLE, LENGTH = DRAM_SIZE - TTB_SIZE - FRAME_SIZE - RAM_HOLE
     UDRAM : ORIGIN = UNCACHED_DRAM_ADDR + RAM_HOLE, LENGTH = DRAM_SIZE - TTB_SIZE - FRAME_SIZE - RAM_HOLE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM), LENGTH = 0x10000000
 }
 
 SECTIONS
 {
+    /DISCARD/ :
+    {
+        *(.eh_frame)
+        *(.ARM.exidx*)
+        *(.ARM.extab*)
+    }
+
     loadaddress = UNCACHED_DRAM_ADDR;
     _loadaddress = UNCACHED_DRAM_ADDR;
     loadaddressend = UNCACHED_DRAM_ADDR + RAM_HOLE;
     _loadaddressend = UNCACHED_DRAM_ADDR + RAM_HOLE;
 
-    .dramcopystart (NOLOAD) :
-    {
-        _dramcopystart = .;
-    } > DRAM
+    _dramcopystart = ORIGIN(DRAM);
 
     .text :
     {
@@ -51,10 +56,7 @@ SECTIONS
 
     _iramcopy = LOADADDR(.itext);
 
-    .dramcopyend (NOLOAD) :
-    {
-        _dramcopyend = .;
-    } > DRAM
+    _dramcopyend = LOADADDR(.itext) + SIZEOF(.itext);
 
     .ibss (NOLOAD) :
     {
@@ -62,7 +64,7 @@ SECTIONS
         *(.qharray)
         *(.ibss*)
         _iend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .stack (NOLOAD) :
     {
@@ -70,7 +72,7 @@ SECTIONS
         stackbegin = .;
         . += 0x2000;
         stackend = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     /* physical address of the stack */
     crt0_tmpstack_phys = stackend - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR;
@@ -80,18 +82,16 @@ SECTIONS
     {
         _edata = .;
         *(.bss*);
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     /* align on cache size boundary to avoid mixing cached and noncached stuff */
-    .ncbss . - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR (NOLOAD) :
+    _ncbss_start = . - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR;
+    .ncbss _ncbss_start (NOLOAD) :
     {
         . = ALIGN(CACHEALIGN_SIZE);
         *(.ncbss*)
         . = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > UDRAM AT> NOLOAD_LMA
 
-    .bssendadr (NOLOAD) :
-    {
-        _end = .;
-    } > DRAM
+    _end = .;
 }

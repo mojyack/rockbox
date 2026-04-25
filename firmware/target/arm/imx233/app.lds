@@ -4,7 +4,6 @@
 ENTRY(start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/imx233/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -13,21 +12,15 @@ STARTUP(target/arm/imx233/crt0.o)
 
 #define DRAMSIZE (DRAM_SIZE - PLUGINSIZE - CODECSIZE - FRAME_SIZE - TTB_SIZE)
 
-/* End of the audio buffer, where the codec buffer starts */
-#define ENDAUDIOADDR  (CACHED_DRAM_ADDR + DRAMSIZE)
-
-/* Where the codec buffer ends, and the plugin buffer starts */
-#define ENDADDR (ENDAUDIOADDR + CODEC_SIZE)
-
-/* INIT section is the codec buffer */
-#define INITSIZE  CODEC_SIZE
-#define INITSTART ENDAUDIOADDR
-
 MEMORY
 {
-    IRAM : ORIGIN = IRAM_ORIG, LENGTH = IRAMSIZE
-    DRAM : ORIGIN = CACHED_DRAM_ADDR, LENGTH = DRAM_SIZE - TTB_SIZE - FRAME_SIZE
-    UDRAM : ORIGIN = UNCACHED_DRAM_ADDR, LENGTH = DRAM_SIZE - TTB_SIZE - FRAME_SIZE
+    IRAM :      ORIGIN = IRAM_ORIG,                           LENGTH = IRAMSIZE
+    DRAM :      ORIGIN = CACHED_DRAM_ADDR,                    LENGTH = DRAMSIZE
+    UDRAM :     ORIGIN = UNCACHED_DRAM_ADDR,                  LENGTH = DRAMSIZE
+    CODECBUF :  ORIGIN = ORIGIN(DRAM) + LENGTH(DRAM),         LENGTH = CODECSIZE
+    PLUGINBUF : ORIGIN = ORIGIN(CODECBUF) + LENGTH(CODECBUF), LENGTH = PLUGINSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ORIGIN(PLUGINBUF) + LENGTH(PLUGINBUF), LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -35,10 +28,7 @@ SECTIONS
     loadaddress = UNCACHED_DRAM_ADDR;
     _loadaddress = UNCACHED_DRAM_ADDR;
 
-    .dramcopystart (NOLOAD) :
-    {
-        _dramcopystart = .;
-    } > DRAM
+    _dramcopystart = ORIGIN(DRAM);
 
     .text :
     {
@@ -62,6 +52,7 @@ SECTIONS
     _iramcopy = LOADADDR(.itext);
 
     .ibss (NOLOAD) :
+        AT(ORIGIN(NOLOAD_LMA))
     {
         _iedata = .;
         *(.qharray)
@@ -69,26 +60,23 @@ SECTIONS
         _iend = .;
     } > IRAM
 
-    .init ENDAUDIOADDR :
+    .init :
     {
         _initstart = .;
         *(.init*)
         _initend = .;
-    } AT> DRAM
+    } > CODECBUF AT> DRAM
 
     _initcopy = LOADADDR(.init);
+    _dramcopyend = LOADADDR(.init) + SIZEOF(.init);
 
     /* crt0 needs a temporary stack which does not overlap with init and itext
      * and is in physical memory: put it *after* init and itext. A small one suffices */
     crt0_tmpstack_phys = _dramcopyend + 0x200 - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR;
 
-    .dramcopyend (NOLOAD) :
-    {
-        _dramcopyend = .;
-    } > DRAM
-
     /* the stack overlaps the init and itext region, to reclaim space */
     .stack _dramtextend (NOLOAD) :
+        AT(LOADADDR(.ibss) + SIZEOF(.ibss))
     {
         *(.stack)
         stackbegin = .;
@@ -98,41 +86,33 @@ SECTIONS
 
     /* treat .bss and .ncbss as a single section */
     .bss (NOLOAD) :
+        AT(LOADADDR(.stack) + SIZEOF(.stack))
     {
         _edata = .;
         *(.bss*);
     } > DRAM
 
     /* align on cache size boundary to avoid mixing cached and noncached stuff */
-    .ncbss . - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR (NOLOAD) :
+    _ncbss_start = . - CACHED_DRAM_ADDR + UNCACHED_DRAM_ADDR;
+    .ncbss _ncbss_start (NOLOAD) :
+        AT(LOADADDR(.bss) + SIZEOF(.bss))
     {
         . = ALIGN(CACHEALIGN_SIZE);
         *(.ncbss*)
         . = ALIGN(CACHEALIGN_SIZE);
-    } AT> DRAM
+    } > UDRAM
 
-    .bssendadr . - UNCACHED_DRAM_ADDR + CACHED_DRAM_ADDR (NOLOAD) :
-    {
-        _end = .;
-    } > DRAM
+    _end = . - UNCACHED_DRAM_ADDR + CACHED_DRAM_ADDR;
 
-    .audiobuf _end (NOLOAD) :
-    {
-        _audiobuffer = .;
-        audiobuffer = .;
-    } > DRAM
+    audiobuffer = ALIGN(_end, 0x4);
+    audiobufend = ORIGIN(CODECBUF);
+    codecbuf = ORIGIN(CODECBUF);
+    pluginbuf = ORIGIN(PLUGINBUF);
 
-    .codec ENDAUDIOADDR (NOLOAD) :
+    /DISCARD/ :
     {
-        audiobufend = .;
-        _audiobufend = .;
-        codecbuf = .;
-        _codecbuf = .;
-    } > DRAM
-
-    .plugin ENDADDR (NOLOAD) :
-    {
-        _pluginbuf = .;
-        pluginbuf = .;
-    } > DRAM
+        *(.eh_frame)
+        *(.ARM.exidx*)
+        *(.ARM.extab*)
+    }
 }
