@@ -3,7 +3,6 @@
 ENTRY(crt0_start)
 OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/stm32/crt0-stm32h7.o)
 
 MEMORY
 {
