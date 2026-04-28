@@ -2233,16 +2233,16 @@ if [ -z "$arch" ]; then
         arch="arm"
         # cpp defines like "#define __ARM_ARCH 4" (where we want to extract the 4)
         arch_version="$(echo "$cpp_defines" | grep 'define __ARM_ARCH ' | sed -e 's,.* \([0-9]\).*,\1,')"
-        arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e 's/.* \([0-9]\{1,\}\)$/\1/')"
+        arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e "s/.* '\?\([0-9A-Z]\+\)'\?$/\1/")"
         if test "$ARG_LLVM" != "1" && test "$ccnum" -ge "800"; then
             # GCC8+ can natively emit unified asm syntax
             GCCOPTS="$GCCOPTS -masm-syntax-unified"
         fi
         case "$arch_profile" in
-        65) # Cortex-A
+        65|A) # Cortex-A
             arch_profile=application
             ;;
-        77) # Cortex-M
+        77|M) # Cortex-M
             arch_profile=micro
 
             # We have a lot of assembly written for ARM32, which won't
