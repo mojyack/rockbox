@@ -7,7 +7,6 @@ OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_FORMAT(elf32-bigarm)
 #endif
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/rk27xx/crt0.o)
 
 #define DRAMORIG 0x60700000
 #define DRAMSIZE (MEMORYSIZE * 0x100000 - 0x700000)

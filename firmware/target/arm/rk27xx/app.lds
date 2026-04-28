@@ -7,7 +7,6 @@ OUTPUT_FORMAT(elf32-littlearm)
 OUTPUT_FORMAT(elf32-bigarm)
 #endif
 OUTPUT_ARCH(arm)
-STARTUP(target/arm/rk27xx/crt0.o)
 
 #define PLUGINSIZE PLUGIN_BUFFER_SIZE
 #define CODECSIZE CODEC_SIZE
@@ -34,6 +33,8 @@ MEMORY
     DRAM  : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
     IRAM  : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
     INIT  : ORIGIN = INITORIG, LENGTH = INITSIZE
+    /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+    NOLOAD_LMA : ORIGIN = ENDADDR + PLUGINSIZE, LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -92,7 +93,7 @@ SECTIONS
      _fiqstackbegin = .;
      . += 0x400;
      _fiqstackend = .;
-  } > DRAM
+  } > DRAM AT> NOLOAD_LMA
 
   .bss (NOLOAD) : {
      _edata = .;
@@ -101,31 +102,14 @@ SECTIONS
      *(COMMON);
     . = ALIGN(0x4);
      _end = .;
-  } > DRAM
+  } > DRAM AT> NOLOAD_LMA
 
-  .audiobuf (NOLOAD) :
-  {
-      . = ALIGN(4);
-      _audiobuffer = .;
-      audiobuffer = .;
-  } > DRAM
+  . = ALIGN(4);
+  _audiobuffer = .;
+  audiobuffer = .;
 
-  .audiobufend ENDAUDIOADDR (NOLOAD) :
-  {
-      audiobufend = .;
-      _audiobufend = .;
-  } > DRAM
-
-  .codec CODECORIG (NOLOAD) :
-  {
-      codecbuf = .;
-      _codecbuf = .;
-  } > DRAM
-
-  .plugin ENDADDR (NOLOAD) :
-  {
-      _pluginbuf = .;
-      pluginbuf = .;
-  }
+  audiobufend = ENDAUDIOADDR;
+  codecbuf = CODECORIG;
+  pluginbuf = ENDADDR;
 
 }
