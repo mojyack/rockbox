@@ -2,12 +2,16 @@
 #include "config.h"
 #include "cpu.h"
 
+#if defined(__clang__)
+OUTPUT_FORMAT("elf32-tradlittlemips")
+#else
 OUTPUT_FORMAT("elf32-littlemips")
+#endif
 OUTPUT_ARCH(MIPS)
 ENTRY(_start)
-STARTUP(target/mips/ingenic_jz47xx/crt0.o)
-INPUT(target/mips/exception-mips.o)
-INPUT(target/mips/system-mips.o)
+
+/* Pull exception-mips.o */
+EXTERN(mips_exception_vectors)
 
 #define IRAMORIG      0x80000000
 #define IRAMSIZE      0x4000
@@ -29,6 +33,8 @@ MEMORY
    DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
    IRAM : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
    INIT : ORIGIN = INITBASE, LENGTH = INITSIZE
+   /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+   NOLOAD_LMA : ORIGIN = DRAMORIG + DRAMSIZE, LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -64,15 +70,16 @@ SECTIONS
     /* Set the load address of .iram at the same address as .bss
      * so RAM won't be wasted as .iram in the end will get copied
      * to IRAM. */
-    .iram IRAMORIG: AT (_edata)
+    .iram : AT (_edata)
     {
+        . = ORIGIN(IRAM);
         _iramstart = .;
         KEEP(*(.vectors.1));
-        . = 0x100;
+        . = ORIGIN(IRAM) + 0x100;
         KEEP(*(.vectors.2));
-        . = 0x180;
+        . = ORIGIN(IRAM) + 0x180;
         KEEP(*(.vectors.3));
-        . = 0x200;
+        . = ORIGIN(IRAM) + 0x200;
         KEEP(*(.vectors.4));
         KEEP(*(.vectors));
 
@@ -106,7 +113,7 @@ SECTIONS
          _irqstackbegin = .;
          . += 0x400;
          _irqstackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     .bss (NOLOAD):
     {
@@ -117,7 +124,7 @@ SECTIONS
          *(COMMON);
          *(.scommon*);
          _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     .audiobuf :
     {
@@ -134,5 +141,8 @@ SECTIONS
         *(.MIPS.abiflags);
         *(.eh_frame);
         *(.rel.dyn);
+        *(.got);
+        *(.got.plt);
+        *(.reginfo);
     }
 }

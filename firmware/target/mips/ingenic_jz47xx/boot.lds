@@ -1,11 +1,15 @@
 #include "config.h"
 
+#if defined(__clang__)
+OUTPUT_FORMAT("elf32-tradlittlemips")
+#else
 OUTPUT_FORMAT("elf32-littlemips")
+#endif
 OUTPUT_ARCH(MIPS)
 ENTRY(_start)
-STARTUP(target/mips/ingenic_jz47xx/crt0.o)
-INPUT(target/mips/exception-mips.o)
-INPUT(target/mips/system-mips.o)
+
+/* Pull exception-mips.o */
+EXTERN(mips_exception_vectors)
 
 #define DRAMSIZE ((MEMORYSIZE-4) * 0x100000)
 
@@ -17,6 +21,8 @@ MEMORY
 {
    DRAM : ORIGIN = DRAMORIG, LENGTH = DRAMSIZE
    IRAM : ORIGIN = IRAMORIG, LENGTH = IRAMSIZE
+   /* LLD requires NOLOAD sections to have non-overlapping LMAs */
+   NOLOAD_LMA : ORIGIN = DRAMORIG + DRAMSIZE, LENGTH = 0x10000000
 }
 
 SECTIONS
@@ -43,20 +49,20 @@ SECTIONS
     {
         *(.data*);
         *(.sdata*);
-        *(.rel.dyn);
     } > DRAM
 
     . = ALIGN(4);
 
-    .iram IRAMORIG:
+    .iram :
     {
+        . = ORIGIN(IRAM);
         _iramstart = .;
         KEEP(*(.vectors.1));
-        . = 0x100;
+        . = ORIGIN(IRAM) + 0x100;
         KEEP(*(.vectors.2));
-        . = 0x180;
+        . = ORIGIN(IRAM) + 0x180;
         KEEP(*(.vectors.3));
-        . = 0x200;
+        . = ORIGIN(IRAM) + 0x200;
         KEEP(*(.vectors.4));
         KEEP(*(.vectors));
 
@@ -79,7 +85,7 @@ SECTIONS
          *(COMMON);
          *(.scommon*);
          _end = .;
-    } > DRAM
+    } > DRAM AT> NOLOAD_LMA
 
     _bootend = .;
 
@@ -92,12 +98,13 @@ SECTIONS
          _irqstackbegin = .;
          . += 0x400;
          _irqstackend = .;
-    } > IRAM
+    } > IRAM AT> NOLOAD_LMA
 
     /DISCARD/ :
     {
         *(.MIPS.abiflags);
         *(.eh_frame);
         *(.rel.dyn);
+        *(.reginfo);
     }
 }
