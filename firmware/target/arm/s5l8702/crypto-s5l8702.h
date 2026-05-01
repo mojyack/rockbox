@@ -21,8 +21,6 @@
 #ifndef __CRYPTO_S5L8702_H__
 #define __CRYPTO_S5L8702_H__
 
-#include <stdint.h>
-
 #include "config.h"
 
 
@@ -41,6 +39,8 @@
 #define SIGN_SZ     16
 
 #ifndef __ASSEMBLER__
+#include <stdint.h>
+
 #define IM3INFO_SZ      (sizeof(struct Im3Info))
 #define IM3INFOSIGN_SZ  (offsetof(struct Im3Info, info_sign))
 
